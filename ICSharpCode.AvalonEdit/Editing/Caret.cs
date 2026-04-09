@@ -1,14 +1,14 @@
-﻿// Copyright (c) 2014 AlphaSierraPapa for the SharpDevelop Team
-// 
+// Copyright (c) 2014 AlphaSierraPapa for the SharpDevelop Team
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
 // without restriction, including without limitation the rights to use, copy, modify, merge,
 // publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
 // to whom the Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all copies or
 // substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 // INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
 // PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
@@ -20,9 +20,6 @@ using System;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Documents;
-using System.Windows.Media;
-using System.Windows.Media.TextFormatting;
-using System.Windows.Threading;
 
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
@@ -33,11 +30,10 @@ namespace ICSharpCode.AvalonEdit.Editing
 	/// <summary>
 	/// Helper class with caret-related methods.
 	/// </summary>
-	public sealed class Caret
+	public sealed partial class Caret
 	{
 		readonly TextArea textArea;
 		readonly TextView textView;
-		readonly CaretLayer caretAdorner;
 		bool visible;
 
 		internal Caret(TextArea textArea)
@@ -46,11 +42,13 @@ namespace ICSharpCode.AvalonEdit.Editing
 			this.textView = textArea.TextView;
 			position = new TextViewPosition(1, 1, 0);
 
-			caretAdorner = new CaretLayer(textArea);
-			textView.InsertLayer(caretAdorner, KnownLayer.Caret, LayerInsertionPosition.Replace);
 			textView.VisualLinesChanged += TextView_VisualLinesChanged;
 			textView.ScrollOffsetChanged += TextView_ScrollOffsetChanged;
+
+			Initialize();
 		}
+
+		partial void Initialize();
 
 		internal void UpdateIfVisible()
 		{
@@ -72,10 +70,10 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		void TextView_ScrollOffsetChanged(object sender, EventArgs e)
 		{
-			if (caretAdorner != null) {
-				caretAdorner.InvalidateVisual();
-			}
+			InvalidateCaretVisual();
 		}
+
+		partial void InvalidateCaretVisual();
 
 		double desiredXPos = double.NaN;
 		TextViewPosition position;
@@ -371,55 +369,19 @@ namespace ICSharpCode.AvalonEdit.Editing
 			isInVirtualSpace = (position.VisualColumn > visualLine.VisualLength);
 		}
 
-		Rect CalcCaretRectangle(VisualLine visualLine)
+		partial void GetCaretWidthCore(ref double width);
+
+		double GetCaretWidth()
 		{
-			if (!visualColumnValid) {
-				RevalidateVisualColumn(visualLine);
-			}
-
-			TextLine textLine = visualLine.GetTextLine(position.VisualColumn, position.IsAtEndOfLine);
-			double xPos = visualLine.GetTextLineVisualXPosition(textLine, position.VisualColumn);
-			double lineTop = visualLine.GetTextLineVisualYPosition(textLine, VisualYPosition.TextTop);
-			double lineBottom = visualLine.GetTextLineVisualYPosition(textLine, VisualYPosition.TextBottom);
-
-			return new Rect(xPos,
-							lineTop,
-							SystemParameters.CaretWidth,
-							lineBottom - lineTop);
+			double width = 1.0;
+			GetCaretWidthCore(ref width);
+			return width;
 		}
 
-		Rect CalcCaretOverstrikeRectangle(VisualLine visualLine)
-		{
-			if (!visualColumnValid) {
-				RevalidateVisualColumn(visualLine);
-			}
-
-			int currentPos = position.VisualColumn;
-			// The text being overwritten in overstrike mode is everything up to the next normal caret stop
-			int nextPos = visualLine.GetNextCaretPosition(currentPos, LogicalDirection.Forward, CaretPositioningMode.Normal, true);
-			TextLine textLine = visualLine.GetTextLine(currentPos);
-
-			Rect r;
-			if (currentPos < visualLine.VisualLength) {
-				// If the caret is within the text, use GetTextBounds() for the text being overwritten.
-				// This is necessary to ensure the rectangle is calculated correctly in bidirectional text.
-				var textBounds = textLine.GetTextBounds(currentPos, nextPos - currentPos)[0];
-				r = textBounds.Rectangle;
-				r.Y += visualLine.GetTextLineVisualYPosition(textLine, VisualYPosition.LineTop);
-			} else {
-				// If the caret is at the end of the line (or in virtual space),
-				// use the visual X position of currentPos and nextPos (one or more of which will be in virtual space)
-				double xPos = visualLine.GetTextLineVisualXPosition(textLine, currentPos);
-				double xPos2 = visualLine.GetTextLineVisualXPosition(textLine, nextPos);
-				double lineTop = visualLine.GetTextLineVisualYPosition(textLine, VisualYPosition.TextTop);
-				double lineBottom = visualLine.GetTextLineVisualYPosition(textLine, VisualYPosition.TextBottom);
-				r = new Rect(xPos, lineTop, xPos2 - xPos, lineBottom - lineTop);
-			}
-			// If the caret is too small (e.g. in front of zero-width character), ensure it's still visible
-			if (r.Width < SystemParameters.CaretWidth)
-				r.Width = SystemParameters.CaretWidth;
-			return r;
-		}
+		// These methods use System.Windows.Media.TextFormatting.TextLine (WPF TextFormatting API).
+		// Implementations live in Caret.wpf.cs (WPF) and Caret.uno.cs (Uno).
+		private partial Rect CalcCaretRectangle(VisualLine visualLine);
+		private partial Rect CalcCaretOverstrikeRectangle(VisualLine visualLine);
 
 		/// <summary>
 		/// Returns the caret rectangle. The coordinate system is in device-independent pixels from the top of the document.
@@ -465,9 +427,17 @@ namespace ICSharpCode.AvalonEdit.Editing
 			visible = true;
 			if (!showScheduled) {
 				showScheduled = true;
-				textArea.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowInternal));
+				// ShowCaretAsync (wpf) clears showScheduled and posts a dispatcher call to ShowInternal.
+				// If ShowCaretAsync has no implementation (Uno), showScheduled stays true and we fall
+				// through to call ShowInternal synchronously.
+				ShowCaretAsync();
+				if (showScheduled) {
+					ShowInternal();
+				}
 			}
 		}
+
+		partial void ShowCaretAsync();
 
 		bool showScheduled;
 		bool hasWin32Caret;
@@ -480,25 +450,19 @@ namespace ICSharpCode.AvalonEdit.Editing
 			if (!visible)
 				return;
 
-			if (caretAdorner != null && textView != null) {
+			if (textView != null) {
 				VisualLine visualLine = textView.GetVisualLine(position.Line);
 				if (visualLine != null) {
 					Rect caretRect = this.textArea.OverstrikeMode ? CalcCaretOverstrikeRectangle(visualLine) : CalcCaretRectangle(visualLine);
-					// Create Win32 caret so that Windows knows where our managed caret is. This is necessary for
-					// features like 'Follow text editing' in the Windows Magnifier.
-					if (!hasWin32Caret) {
-						hasWin32Caret = Win32.CreateCaret(textView, caretRect.Size);
-					}
-					if (hasWin32Caret) {
-						Win32.SetCaretPosition(textView, caretRect.Location - textView.ScrollOffset);
-					}
-					caretAdorner.Show(caretRect);
-					textArea.ime.UpdateCompositionWindow();
+					ShowCaretInternal(caretRect);
 				} else {
-					caretAdorner.Hide();
+					HideCaretInternal();
 				}
 			}
 		}
+
+		partial void ShowCaretInternal(Rect caretRect);
+		partial void HideCaretInternal();
 
 		/// <summary>
 		/// Makes the caret invisible.
@@ -507,28 +471,17 @@ namespace ICSharpCode.AvalonEdit.Editing
 		{
 			Log("Caret.Hide()");
 			visible = false;
-			if (hasWin32Caret) {
-				Win32.DestroyCaret();
-				hasWin32Caret = false;
-			}
-			if (caretAdorner != null) {
-				caretAdorner.Hide();
-			}
+			DestroyWin32Caret();
+			HideCaretInternal();
 		}
+
+		partial void DestroyWin32Caret();
 
 		[Conditional("DEBUG")]
 		static void Log(string text)
 		{
 			// commented out to make debug output less noisy - add back if there are any problems with the caret
 			//Debug.WriteLine(text);
-		}
-
-		/// <summary>
-		/// Gets/Sets the color of the caret.
-		/// </summary>
-		public Brush CaretBrush {
-			get { return caretAdorner.CaretBrush; }
-			set { caretAdorner.CaretBrush = value; }
 		}
 	}
 }

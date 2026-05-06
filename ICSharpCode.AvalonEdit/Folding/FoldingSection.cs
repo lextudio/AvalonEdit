@@ -19,19 +19,16 @@
 using System.Diagnostics;
 
 using ICSharpCode.AvalonEdit.Document;
-using ICSharpCode.AvalonEdit.Rendering;
-using ICSharpCode.AvalonEdit.Utils;
 
 namespace ICSharpCode.AvalonEdit.Folding
 {
 	/// <summary>
 	/// A section that can be folded.
 	/// </summary>
-	public sealed class FoldingSection : TextSegment
+	public sealed partial class FoldingSection : TextSegment
 	{
 		readonly FoldingManager manager;
 		bool isFolded;
-		internal CollapsedLineSection[] collapsedSections;
 		string title;
 
 		/// <summary>
@@ -42,42 +39,18 @@ namespace ICSharpCode.AvalonEdit.Folding
 			set {
 				if (isFolded != value) {
 					isFolded = value;
-					ValidateCollapsedLineSections(); // create/destroy CollapsedLineSection
-					manager.Redraw(this);
+					ValidateCollapsedLineSections();
+					manager.RaiseFoldingsChanged(this);
 				}
 			}
 		}
 
 		internal void ValidateCollapsedLineSections()
 		{
-			if (!isFolded) {
-				RemoveCollapsedLineSection();
-				return;
-			}
-			// It is possible that StartOffset/EndOffset get set to invalid values via the property setters in TextSegment,
-			// so we coerce those values into the valid range.
-			DocumentLine startLine = manager.document.GetLineByOffset(StartOffset.CoerceValue(0, manager.document.TextLength));
-			DocumentLine endLine = manager.document.GetLineByOffset(EndOffset.CoerceValue(0, manager.document.TextLength));
-			if (startLine == endLine) {
-				RemoveCollapsedLineSection();
-			} else {
-				if (collapsedSections == null)
-					collapsedSections = new CollapsedLineSection[manager.textViews.Count];
-				// Validate collapsed line sections
-				DocumentLine startLinePlusOne = startLine.NextLine;
-				for (int i = 0; i < collapsedSections.Length; i++) {
-					var collapsedSection = collapsedSections[i];
-					if (collapsedSection == null || collapsedSection.Start != startLinePlusOne || collapsedSection.End != endLine) {
-						// recreate this collapsed section
-						if (collapsedSection != null) {
-							Debug.WriteLine("CollapsedLineSection validation - recreate collapsed section from " + startLinePlusOne + " to " + endLine);
-							collapsedSection.Uncollapse();
-						}
-						collapsedSections[i] = manager.textViews[i].CollapseLines(startLinePlusOne, endLine);
-					}
-				}
-			}
+			ValidateCollapsedLineSectionsCore();
 		}
+
+		partial void ValidateCollapsedLineSectionsCore();
 
 		/// <inheritdoc/>
 		protected override void OnSegmentChanged()
@@ -86,7 +59,7 @@ namespace ICSharpCode.AvalonEdit.Folding
 			base.OnSegmentChanged();
 			// don't redraw if the FoldingSection wasn't added to the FoldingManager's collection yet
 			if (IsConnectedToCollection)
-				manager.Redraw(this);
+				manager.RaiseFoldingsChanged(this);
 		}
 
 		/// <summary>
@@ -100,7 +73,7 @@ namespace ICSharpCode.AvalonEdit.Folding
 				if (title != value) {
 					title = value;
 					if (this.IsFolded)
-						manager.Redraw(this);
+						manager.RaiseFoldingsChanged(this);
 				}
 			}
 		}
@@ -125,17 +98,6 @@ namespace ICSharpCode.AvalonEdit.Folding
 			this.manager = manager;
 			this.StartOffset = startOffset;
 			this.Length = endOffset - startOffset;
-		}
-
-		void RemoveCollapsedLineSection()
-		{
-			if (collapsedSections != null) {
-				foreach (var collapsedSection in collapsedSections) {
-					if (collapsedSection != null && collapsedSection.Start != null)
-						collapsedSection.Uncollapse();
-				}
-				collapsedSections = null;
-			}
 		}
 	}
 }

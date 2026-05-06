@@ -23,22 +23,30 @@ using System.Linq;
 using System.Windows;
 
 using ICSharpCode.AvalonEdit.Document;
-using ICSharpCode.AvalonEdit.Editing;
-using ICSharpCode.AvalonEdit.Rendering;
 using ICSharpCode.AvalonEdit.Utils;
 
 namespace ICSharpCode.AvalonEdit.Folding
 {
 	/// <summary>
-	/// Stores a list of foldings for a specific TextView and TextDocument.
+	/// Stores a list of foldings for a specific TextDocument.
 	/// </summary>
-	public class FoldingManager : IWeakEventListener
+	public partial class FoldingManager : IWeakEventListener
 	{
 		internal readonly TextDocument document;
-
-		internal readonly List<TextView> textViews = new List<TextView>();
 		readonly TextSegmentCollection<FoldingSection> foldings;
 		bool isFirstUpdate = true;
+
+		/// <summary>
+		/// Raised whenever the set of foldings or the IsFolded state changes.
+		/// </summary>
+		public event EventHandler FoldingsChanged;
+
+		/// <summary>
+		/// Gets the document whose foldings are tracked.
+		/// </summary>
+		public TextDocument Document {
+			get { return document; }
+		}
 
 		#region Constructor
 		/// <summary>
@@ -78,57 +86,14 @@ namespace ICSharpCode.AvalonEdit.Folding
 			// extend end offset to the end of the line (including delimiter)
 			var endLine = document.GetLineByOffset(newEndOffset);
 			newEndOffset = endLine.Offset + endLine.TotalLength;
-			foreach (var affectedFolding in foldings.FindOverlappingSegments(e.Offset, newEndOffset - e.Offset)) {
+			foreach (var affectedFolding in foldings.FindOverlappingSegments(e.Offset, newEndOffset - e.Offset).ToList()) {
 				if (affectedFolding.Length == 0) {
 					RemoveFolding(affectedFolding);
 				} else {
 					affectedFolding.ValidateCollapsedLineSections();
 				}
 			}
-		}
-		#endregion
-
-		#region Manage TextViews
-		internal void AddToTextView(TextView textView)
-		{
-			if (textView == null || textViews.Contains(textView))
-				throw new ArgumentException();
-			textViews.Add(textView);
-			foreach (FoldingSection fs in foldings) {
-				if (fs.collapsedSections != null) {
-					Array.Resize(ref fs.collapsedSections, textViews.Count);
-					fs.ValidateCollapsedLineSections();
-				}
-			}
-		}
-
-		internal void RemoveFromTextView(TextView textView)
-		{
-			int pos = textViews.IndexOf(textView);
-			if (pos < 0)
-				throw new ArgumentException();
-			textViews.RemoveAt(pos);
-			foreach (FoldingSection fs in foldings) {
-				if (fs.collapsedSections != null) {
-					var c = new CollapsedLineSection[textViews.Count];
-					Array.Copy(fs.collapsedSections, 0, c, 0, pos);
-					fs.collapsedSections[pos].Uncollapse();
-					Array.Copy(fs.collapsedSections, pos + 1, c, pos, c.Length - pos);
-					fs.collapsedSections = c;
-				}
-			}
-		}
-
-		internal void Redraw()
-		{
-			foreach (TextView textView in textViews)
-				textView.Redraw();
-		}
-
-		internal void Redraw(FoldingSection fs)
-		{
-			foreach (TextView textView in textViews)
-				textView.Redraw(fs);
+			RaiseFoldingsChanged();
 		}
 		#endregion
 
@@ -144,7 +109,7 @@ namespace ICSharpCode.AvalonEdit.Folding
 				throw new ArgumentException("Folding must be within document boundary");
 			FoldingSection fs = new FoldingSection(this, startOffset, endOffset);
 			foldings.Add(fs);
-			Redraw(fs);
+			RaiseFoldingsChanged(fs);
 			return fs;
 		}
 
@@ -157,7 +122,7 @@ namespace ICSharpCode.AvalonEdit.Folding
 				throw new ArgumentNullException("fs");
 			fs.IsFolded = false;
 			foldings.Remove(fs);
-			Redraw(fs);
+			RaiseFoldingsChanged(fs);
 		}
 
 		/// <summary>
@@ -169,7 +134,7 @@ namespace ICSharpCode.AvalonEdit.Folding
 			foreach (FoldingSection s in foldings)
 				s.IsFolded = false;
 			foldings.Clear();
-			Redraw();
+			RaiseFoldingsChanged();
 		}
 		#endregion
 
@@ -272,10 +237,10 @@ namespace ICSharpCode.AvalonEdit.Folding
 				// reuse current folding if its matching:
 				if (oldFoldingIndex < oldFoldings.Length && newFolding.StartOffset == oldFoldings[oldFoldingIndex].StartOffset) {
 					section = oldFoldings[oldFoldingIndex++];
-					section.Length = newFolding.EndOffset - newFolding.StartOffset;
+					section.Length = endOffset - startOffset;
 				} else {
 					// no matching current folding; create a new one:
-					section = this.CreateFolding(newFolding.StartOffset, newFolding.EndOffset);
+					section = this.CreateFolding(startOffset, endOffset);
 					// auto-close #regions only when opening the document
 					if (isFirstUpdate) {
 						section.IsFolded = newFolding.DefaultClosed;
@@ -295,103 +260,17 @@ namespace ICSharpCode.AvalonEdit.Folding
 		}
 		#endregion
 
-		#region Install
-		/// <summary>
-		/// Adds Folding support to the specified text area.
-		/// Warning: The folding manager is only valid for the text area's current document. The folding manager
-		/// must be uninstalled before the text area is bound to a different document.
-		/// </summary>
-		/// <returns>The <see cref="FoldingManager"/> that manages the list of foldings inside the text area.</returns>
-		public static FoldingManager Install(TextArea textArea)
+		internal void RaiseFoldingsChanged()
 		{
-			if (textArea == null)
-				throw new ArgumentNullException("textArea");
-			return new FoldingManagerInstallation(textArea);
+			RaiseFoldingsChanged(null);
 		}
 
-		/// <summary>
-		/// Uninstalls the folding manager.
-		/// </summary>
-		/// <exception cref="ArgumentException">The specified manager was not created using <see cref="Install"/>.</exception>
-		public static void Uninstall(FoldingManager manager)
+		internal void RaiseFoldingsChanged(FoldingSection fs)
 		{
-			if (manager == null)
-				throw new ArgumentNullException("manager");
-			FoldingManagerInstallation installation = manager as FoldingManagerInstallation;
-			if (installation != null) {
-				installation.Uninstall();
-			} else {
-				throw new ArgumentException("FoldingManager was not created using FoldingManager.Install");
-			}
+			FoldingsChanged?.Invoke(this, EventArgs.Empty);
+			OnFoldingsChanged(fs);
 		}
 
-		sealed class FoldingManagerInstallation : FoldingManager
-		{
-			TextArea textArea;
-			FoldingMargin margin;
-			FoldingElementGenerator generator;
-
-			public FoldingManagerInstallation(TextArea textArea) : base(textArea.Document)
-			{
-				this.textArea = textArea;
-				margin = new FoldingMargin() { FoldingManager = this };
-				generator = new FoldingElementGenerator() { FoldingManager = this };
-				textArea.LeftMargins.Add(margin);
-				textArea.TextView.Services.AddService(typeof(FoldingManager), this);
-				// HACK: folding only works correctly when it has highest priority
-				textArea.TextView.ElementGenerators.Insert(0, generator);
-				textArea.Caret.PositionChanged += textArea_Caret_PositionChanged;
-			}
-
-			/*
-			void DemoMode()
-			{
-				foldingGenerator = new FoldingElementGenerator() { FoldingManager = fm };
-				foldingMargin = new FoldingMargin { FoldingManager = fm };
-				foldingMarginBorder = new Border {
-					Child = foldingMargin,
-					Background = new LinearGradientBrush(Colors.White, Colors.Transparent, 0)
-				};
-				foldingMarginBorder.SizeChanged += UpdateTextViewClip;
-				textEditor.TextArea.TextView.ElementGenerators.Add(foldingGenerator);
-				textEditor.TextArea.LeftMargins.Add(foldingMarginBorder);
-			}
-			
-			void UpdateTextViewClip(object sender, SizeChangedEventArgs e)
-			{
-				textEditor.TextArea.TextView.Clip = new RectangleGeometry(
-					new Rect(-foldingMarginBorder.ActualWidth,
-					         0,
-					         textEditor.TextArea.TextView.ActualWidth + foldingMarginBorder.ActualWidth,
-					         textEditor.TextArea.TextView.ActualHeight));
-			}
-			 */
-
-			public void Uninstall()
-			{
-				Clear();
-				if (textArea != null) {
-					textArea.Caret.PositionChanged -= textArea_Caret_PositionChanged;
-					textArea.LeftMargins.Remove(margin);
-					textArea.TextView.ElementGenerators.Remove(generator);
-					textArea.TextView.Services.RemoveService(typeof(FoldingManager));
-					margin = null;
-					generator = null;
-					textArea = null;
-				}
-			}
-
-			void textArea_Caret_PositionChanged(object sender, EventArgs e)
-			{
-				// Expand Foldings when Caret is moved into them.
-				int caretOffset = textArea.Caret.Offset;
-				foreach (FoldingSection s in GetFoldingsContaining(caretOffset)) {
-					if (s.IsFolded && s.StartOffset < caretOffset && caretOffset < s.EndOffset) {
-						s.IsFolded = false;
-					}
-				}
-			}
-		}
-		#endregion
+		partial void OnFoldingsChanged(FoldingSection fs);
 	}
 }

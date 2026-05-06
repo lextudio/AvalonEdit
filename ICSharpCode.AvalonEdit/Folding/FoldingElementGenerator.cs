@@ -18,20 +18,16 @@
 
 using System;
 using System.Collections.Generic;
-using System.Windows;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.TextFormatting;
 
 using ICSharpCode.AvalonEdit.Rendering;
-using ICSharpCode.AvalonEdit.Utils;
 
 namespace ICSharpCode.AvalonEdit.Folding
 {
 	/// <summary>
 	/// A <see cref="VisualLineElementGenerator"/> that produces line elements for folded <see cref="FoldingSection"/>s.
 	/// </summary>
-	public sealed class FoldingElementGenerator : VisualLineElementGenerator, ITextViewConnect
+	public sealed partial class FoldingElementGenerator : VisualLineElementGenerator, ITextViewConnect
 	{
 		readonly List<TextView> textViews = new List<TextView>();
 		FoldingManager foldingManager;
@@ -48,13 +44,14 @@ namespace ICSharpCode.AvalonEdit.Folding
 				if (foldingManager != value) {
 					if (foldingManager != null) {
 						foreach (TextView v in textViews)
-							foldingManager.RemoveFromTextView(v);
+							RemoveFoldingManagerFromTextView(foldingManager, v);
 					}
 					foldingManager = value;
 					if (foldingManager != null) {
 						foreach (TextView v in textViews)
-							foldingManager.AddToTextView(v);
+							AddFoldingManagerToTextView(foldingManager, v);
 					}
+					OnFoldingManagerChanged();
 				}
 			}
 		}
@@ -63,14 +60,14 @@ namespace ICSharpCode.AvalonEdit.Folding
 		{
 			textViews.Add(textView);
 			if (foldingManager != null)
-				foldingManager.AddToTextView(textView);
+				AddFoldingManagerToTextView(foldingManager, textView);
 		}
 
 		void ITextViewConnect.RemoveFromTextView(TextView textView)
 		{
 			textViews.Remove(textView);
 			if (foldingManager != null)
-				foldingManager.RemoveFromTextView(textView);
+				RemoveFoldingManagerFromTextView(foldingManager, textView);
 		}
 		#endregion
 
@@ -79,8 +76,7 @@ namespace ICSharpCode.AvalonEdit.Folding
 		{
 			base.StartGeneration(context);
 			if (foldingManager != null) {
-				if (!foldingManager.textViews.Contains(context.TextView))
-					throw new ArgumentException("Invalid TextView");
+				ValidateTextView(context);
 				if (context.Document != foldingManager.document)
 					throw new ArgumentException("Invalid document");
 			}
@@ -137,60 +133,17 @@ namespace ICSharpCode.AvalonEdit.Folding
 				string title = foldingSection.Title;
 				if (string.IsNullOrEmpty(title))
 					title = "...";
-				var p = new VisualLineElementTextRunProperties(CurrentContext.GlobalTextRunProperties);
-				p.SetForegroundBrush(textBrush);
-				var textFormatter = TextFormatterFactory.Create(CurrentContext.TextView);
-				var text = FormattedTextElement.PrepareText(textFormatter, title, p);
-				return new FoldingLineElement(foldingSection, text, foldedUntil - offset) { textBrush = textBrush };
+				return CreateFoldingElement(foldingSection, title, foldedUntil - offset);
 			} else {
 				return null;
 			}
 		}
 
-		sealed class FoldingLineElement : FormattedTextElement
-		{
-			readonly FoldingSection fs;
-
-			internal Brush textBrush;
-
-			public FoldingLineElement(FoldingSection fs, TextLine text, int documentLength) : base(text, documentLength)
-			{
-				this.fs = fs;
-			}
-
-			public override TextRun CreateTextRun(int startVisualColumn, ITextRunConstructionContext context)
-			{
-				return new FoldingLineTextRun(this, this.TextRunProperties) { textBrush = textBrush };
-			}
-
-			protected internal override void OnMouseDown(MouseButtonEventArgs e)
-			{
-				if (e.ClickCount == 2 && e.ChangedButton == MouseButton.Left) {
-					fs.IsFolded = false;
-					e.Handled = true;
-				} else {
-					base.OnMouseDown(e);
-				}
-			}
-		}
-
-		sealed class FoldingLineTextRun : FormattedTextRun
-		{
-			internal Brush textBrush;
-
-			public FoldingLineTextRun(FormattedTextElement element, TextRunProperties properties)
-				: base(element, properties)
-			{
-			}
-
-			public override void Draw(DrawingContext drawingContext, Point origin, bool rightToLeft, bool sideways)
-			{
-				var metrics = Format(double.PositiveInfinity);
-				Rect r = new Rect(origin.X, origin.Y - metrics.Baseline, metrics.Width, metrics.Height);
-				drawingContext.DrawRectangle(null, new Pen(textBrush, 1), r);
-				base.Draw(drawingContext, origin, rightToLeft, sideways);
-			}
-		}
+		partial void AddFoldingManagerToTextView(FoldingManager manager, TextView textView);
+		partial void RemoveFoldingManagerFromTextView(FoldingManager manager, TextView textView);
+		partial void ValidateTextView(ITextRunConstructionContext context);
+		partial void OnFoldingManagerChanged();
+		private partial VisualLineElement CreateFoldingElement(FoldingSection foldingSection, string title, int documentLength);
 
 		/// <summary>
 		/// Default brush for folding element text. Value: Brushes.Gray

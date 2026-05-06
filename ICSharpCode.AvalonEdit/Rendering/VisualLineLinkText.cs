@@ -17,19 +17,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
-using System.Windows;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media.TextFormatting;
-using System.Windows.Navigation;
 
 namespace ICSharpCode.AvalonEdit.Rendering
 {
 	/// <summary>
 	/// VisualLineElement that represents a piece of text and is a clickable link.
 	/// </summary>
-	public class VisualLineLinkText : VisualLineText
+	public partial class VisualLineLinkText : VisualLineText
 	{
 		/// <summary>
 		/// Gets/Sets the URL that is navigated to when the link is clicked.
@@ -63,57 +58,17 @@ namespace ICSharpCode.AvalonEdit.Rendering
 			this.TextRunProperties.SetForegroundBrush(context.TextView.LinkTextForegroundBrush);
 			this.TextRunProperties.SetBackgroundBrush(context.TextView.LinkTextBackgroundBrush);
 			if (context.TextView.LinkTextUnderline)
-				this.TextRunProperties.SetTextDecorations(TextDecorations.Underline);
+				ApplyLinkTextDecorations();
 			return base.CreateTextRun(startVisualColumn, context);
 		}
 
 		/// <summary>
 		/// Gets whether the link is currently clickable.
 		/// </summary>
-		/// <remarks>Returns true when control is pressed; or when
-		/// <see cref="RequireControlModifierForClick"/> is disabled.</remarks>
-		protected virtual bool LinkIsClickable()
-		{
-			if (NavigateUri == null)
-				return false;
-			if (RequireControlModifierForClick)
-				return (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-			else
-				return true;
-		}
+		/// <remarks>Platform partials refine this when modifier-state information is available.</remarks>
+		protected virtual partial bool LinkIsClickable();
 
-		/// <inheritdoc/>
-		protected internal override void OnQueryCursor(QueryCursorEventArgs e)
-		{
-			if (LinkIsClickable()) {
-				e.Handled = true;
-				e.Cursor = Cursors.Hand;
-			}
-		}
-
-		/// <inheritdoc/>
-		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes",
-														 Justification = "I've seen Process.Start throw undocumented exceptions when the mail client / web browser is installed incorrectly")]
-		protected internal override void OnMouseDown(MouseButtonEventArgs e)
-		{
-			if (e.ChangedButton == MouseButton.Left && !e.Handled && LinkIsClickable()) {
-				RequestNavigateEventArgs args = new RequestNavigateEventArgs(this.NavigateUri, this.TargetName);
-				args.RoutedEvent = Hyperlink.RequestNavigateEvent;
-				FrameworkElement element = e.Source as FrameworkElement;
-				if (element != null) {
-					// allow user code to handle the navigation request
-					element.RaiseEvent(args);
-				}
-				if (!args.Handled) {
-					try {
-						Process.Start(new ProcessStartInfo { FileName = this.NavigateUri.ToString(), UseShellExecute = true });
-					} catch {
-						// ignore all kinds of errors during web browser start
-					}
-				}
-				e.Handled = true;
-			}
-		}
+		partial void ApplyLinkTextDecorations();
 
 		/// <inheritdoc/>
 		protected override VisualLineText CreateInstance(int length)

@@ -98,7 +98,11 @@ namespace ICSharpCode.AvalonEdit.Highlighting.Xshd
 			this.Foreground = (HighlightingBrush)info.GetValue("Foreground", typeof(HighlightingBrush));
 			this.Background = (HighlightingBrush)info.GetValue("Background", typeof(HighlightingBrush));
 			if (info.GetBoolean("HasWeight"))
-				this.FontWeight = System.Windows.FontWeight.FromOpenTypeWeight(info.GetInt32("Weight"));
+#if WINDOWS_APP_SDK
+				this.FontWeight = global::Windows.UI.Text.FontWeight.FromOpenTypeWeight(info.GetInt32("Weight"));
+#else
+				this.FontWeight = System.Windows.FontWeight.FromOpenTypeWeight(info.GetInt32("Weight"));	
+#endif
 			if (info.GetBoolean("HasStyle"))
 				this.FontStyle = (FontStyle?)new FontStyleConverter().ConvertFromInvariantString(info.GetString("Style"));
 			this.ExampleText = info.GetString("ExampleText");

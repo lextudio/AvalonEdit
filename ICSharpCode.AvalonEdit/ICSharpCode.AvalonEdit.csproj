@@ -1,10 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="ProGPU.Wpf.Sdk/11.0.0-dev">
+  <!-- Cross-platform (ProGPU/macOS) adaptation of the upstream AvalonEdit 6.3.2 master csproj:
+       single net11.0-windows target via ProGPU.Wpf.Sdk instead of the upstream
+       net8.0-windows;net10.0-windows;net462 multi-target, WinForms dropped (the 3 WinForms usages
+       in TextArea/InsightWindow/CompletionWindowBase are patched out - see the "stop caring about
+       WinForms" comments there), and SourceLink removed (no CI/package publishing here). Resource/
+       EmbeddedResource item groups are kept verbatim from upstream master. -->
   <PropertyGroup>
-    <OutputType>Library</OutputType>
-    <TargetFrameworks>net8.0-windows;net10.0-windows;net462</TargetFrameworks>
+    <TargetFramework>net11.0-windows</TargetFramework>
+    <RootNamespace>ICSharpCode.AvalonEdit</RootNamespace>
+    <AssemblyName>ICSharpCode.AvalonEdit</AssemblyName>
     <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
-    <DefineConstants>TRACE</DefineConstants>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>ICSharpCode.AvalonEdit.snk</AssemblyOriginatorKeyFile>
     <Company>ic#code</Company>
@@ -13,54 +19,13 @@
     <Version>6.3.2</Version>
     <AssemblyVersion>6.3.2.0</AssemblyVersion>
     <FileVersion>6.3.2.0</FileVersion>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <PackageId>AvalonEdit</PackageId>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <RepositoryUrl>https://github.com/icsharpcode/AvalonEdit.git</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <Authors>AvalonEdit Contributors</Authors>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>http://www.avalonedit.net</PackageProjectUrl>
-    <PackageIcon>images\AvalonEditNuGetPackageIcon.png</PackageIcon>
-    <PackageTags>WPF Text Editor SharpDevelop AvalonEdit</PackageTags>
-    <PackageReleaseNotes>Changes are detailed at https://github.com/icsharpcode/AvalonEdit/blob/master/ChangeLog.md</PackageReleaseNotes>
-    <PackageReadmeFile>PackageReadme.md</PackageReadmeFile>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="docs\PackageReadme.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
-
-  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'net10.0-windows' ">
-    <DefineConstants>TRACE</DefineConstants>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'net8.0-windows' ">
-    <DefineConstants>TRACE</DefineConstants>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'net462' ">
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'net462' ">
-    <Reference Include="System.Windows.Forms" />
-  </ItemGroup>
   <ItemGroup>
     <None Remove="Search\next.png" />
     <None Remove="Search\prev.png" />
     <None Remove="themes\RightArrow.cur" />
-    <None Include="AvalonEditNuGetPackageIcon.png">
-      <Pack>True</Pack>
-      <PackagePath>images</PackagePath>
-    </None>
     <Resource Include="Search\next.png" />
     <Resource Include="Search\prev.png" />
     <Resource Include="themes\RightArrow.cur" />
@@ -70,9 +35,5 @@
     <EmbeddedResource Include="Highlighting\Resources\*" />
     <EmbeddedResource Remove="Highlighting\Resources\Resources.cs" />
     <Resource Include="Highlighting\Resources\Resources.cs" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 </Project>

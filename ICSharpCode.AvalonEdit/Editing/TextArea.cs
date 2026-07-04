@@ -1050,18 +1050,13 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		void ShowMouseCursor()
 		{
-			if (this.isMouseCursorHidden) {
-				System.Windows.Forms.Cursor.Show();
-				this.isMouseCursorHidden = false;
-			}
+			// WinForms Cursor.Show/Hide has no cross-platform WPF equivalent; hide-while-typing
+			// is a cosmetic feature only, so it's simply disabled here (stop caring about WinForms).
+			this.isMouseCursorHidden = false;
 		}
 
 		void HideMouseCursor()
 		{
-			if (Options.HideCursorWhileTyping && !this.isMouseCursorHidden && this.IsMouseOver) {
-				this.isMouseCursorHidden = true;
-				System.Windows.Forms.Cursor.Hide();
-			}
 		}
 
 		#endregion

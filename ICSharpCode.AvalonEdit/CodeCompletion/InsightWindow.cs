@@ -52,7 +52,9 @@ namespace ICSharpCode.AvalonEdit.CodeCompletion
 		{
 			Rect caret = this.TextArea.Caret.CalculateCaretRectangle();
 			Point pointOnScreen = this.TextArea.TextView.PointToScreen(caret.Location - this.TextArea.TextView.ScrollOffset);
-			Rect workingArea = System.Windows.Forms.Screen.FromPoint(pointOnScreen.ToSystemDrawing()).WorkingArea.ToWpf().TransformFromDevice(this);
+			// WinForms Screen.FromPoint has no cross-platform equivalent; approximate with the
+			// primary work area (single-monitor assumption, stop caring about WinForms).
+			Rect workingArea = SystemParameters.WorkArea.TransformFromDevice(this);
 
 			MaxHeight = workingArea.Height;
 			MaxWidth = Math.Min(workingArea.Width, Math.Max(1000, workingArea.Width * 0.6));

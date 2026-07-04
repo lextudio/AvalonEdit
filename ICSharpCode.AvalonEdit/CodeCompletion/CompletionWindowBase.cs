@@ -341,7 +341,9 @@ namespace ICSharpCode.AvalonEdit.CodeCompletion
 			// Let's use device dependent units for everything
 			Size completionWindowSize = new Size(this.ActualWidth, this.ActualHeight).TransformToDevice(textView);
 			Rect bounds = new Rect(location, completionWindowSize);
-			Rect workingScreen = System.Windows.Forms.Screen.GetWorkingArea(location.ToSystemDrawing()).ToWpf();
+			// WinForms Screen.GetWorkingArea has no cross-platform equivalent; approximate with
+			// the primary work area (single-monitor assumption, stop caring about WinForms).
+			Rect workingScreen = SystemParameters.WorkArea;
 			if (!workingScreen.Contains(bounds)) {
 				if (bounds.Left < workingScreen.Left) {
 					bounds.X = workingScreen.Left;

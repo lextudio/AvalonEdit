@@ -34,16 +34,25 @@ namespace ICSharpCode.AvalonEdit.Utils
 		/// Gets the caret blink time.
 		/// </summary>
 		public static TimeSpan CaretBlinkTime {
-			get { return TimeSpan.FromMilliseconds(SafeNativeMethods.GetCaretBlinkTime()); }
+			get {
+				if (!OperatingSystem.IsWindows())
+					return TimeSpan.FromMilliseconds(530); // matches the Win32 default caret blink rate
+				return TimeSpan.FromMilliseconds(SafeNativeMethods.GetCaretBlinkTime());
+			}
 		}
 
 		/// <summary>
 		/// Creates an invisible Win32 caret for the specified Visual with the specified size (coordinates local to the owner visual).
+		/// This exists purely to let Windows accessibility features (e.g. Magnifier's 'Follow text
+		/// editing') track our managed caret - it draws nothing. AvalonEdit's own caretAdorner
+		/// (CaretLayer) always renders the visible caret, on every platform.
 		/// </summary>
 		public static bool CreateCaret(Visual owner, Size size)
 		{
 			if (owner == null)
 				throw new ArgumentNullException("owner");
+			if (!OperatingSystem.IsWindows())
+				return false;
 			HwndSource source = PresentationSource.FromVisual(owner) as HwndSource;
 			if (source != null) {
 				Vector r = owner.PointToScreen(new Point(size.Width, size.Height)) - owner.PointToScreen(new Point(0, 0));
@@ -60,6 +69,8 @@ namespace ICSharpCode.AvalonEdit.Utils
 		{
 			if (owner == null)
 				throw new ArgumentNullException("owner");
+			if (!OperatingSystem.IsWindows())
+				return false;
 			HwndSource source = PresentationSource.FromVisual(owner) as HwndSource;
 			if (source != null) {
 				Point pointOnRootVisual = owner.TransformToAncestor(source.RootVisual).Transform(position);
@@ -75,6 +86,8 @@ namespace ICSharpCode.AvalonEdit.Utils
 		/// </summary>
 		public static bool DestroyCaret()
 		{
+			if (!OperatingSystem.IsWindows())
+				return false;
 			return SafeNativeMethods.DestroyCaret();
 		}
 

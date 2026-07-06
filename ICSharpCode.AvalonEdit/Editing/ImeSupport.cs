@@ -1,14 +1,14 @@
-﻿// Copyright (c) 2014 AlphaSierraPapa for the SharpDevelop Team
-// 
+// Copyright (c) 2014 AlphaSierraPapa for the SharpDevelop Team
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
 // without restriction, including without limitation the rights to use, copy, modify, merge,
 // publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
 // to whom the Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all copies or
 // substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 // INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
 // PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
@@ -33,12 +33,15 @@ namespace ICSharpCode.AvalonEdit.Editing
 		HwndSource hwndSource;
 		EventHandler requerySuggestedHandler; // we need to keep the event handler instance alive because CommandManager.RequerySuggested uses weak references
 		bool isReadOnly;
+		readonly MacImeSupport macImeSupport;
 
 		public ImeSupport(TextArea textArea)
 		{
 			if (textArea == null)
 				throw new ArgumentNullException("textArea");
 			this.textArea = textArea;
+			if (!OperatingSystem.IsWindows())
+				macImeSupport = new MacImeSupport(textArea);
 			InputMethod.SetIsInputMethodSuspended(this.textArea, textArea.Options.EnableImeSupport);
 			// We listen to CommandManager.RequerySuggested for both caret offset changes and changes to the set of read-only sections.
 			// This is because there's no dedicated event for read-only section changes; but RequerySuggested needs to be raised anyways
@@ -63,11 +66,19 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		public void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
 		{
+			if (macImeSupport != null) {
+				macImeSupport.OnGotKeyboardFocus();
+				return;
+			}
 			UpdateImeEnabled();
 		}
 
 		public void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
 		{
+			if (macImeSupport != null) {
+				macImeSupport.OnLostKeyboardFocus();
+				return;
+			}
 			if (e.OldFocus == textArea && currentContext != IntPtr.Zero)
 				ImeNativeWrapper.NotifyIme(currentContext);
 			ClearContext();
@@ -75,6 +86,13 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		void UpdateImeEnabled()
 		{
+			if (macImeSupport != null) {
+				// ImeNativeWrapper P/Invokes imm32.dll/msctf.dll, which don't exist outside
+				// Windows - the real cross-platform composition path is MacImeSupport
+				// (TextCore.Wpf's CoreTextEditContext/MacOSTextInputAdapter), driven from
+				// OnGotKeyboardFocus/OnLostKeyboardFocus/UpdateCompositionWindow instead.
+				return;
+			}
 			if (textArea.Options.EnableImeSupport && textArea.IsKeyboardFocused) {
 				bool newReadOnly = !textArea.ReadOnlySectionProvider.CanInsert(textArea.Caret.Offset);
 				if (hwndSource == null || isReadOnly != newReadOnly) {
@@ -145,6 +163,10 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		public void UpdateCompositionWindow()
 		{
+			if (macImeSupport != null) {
+				macImeSupport.UpdateCompositionWindow();
+				return;
+			}
 			if (currentContext != IntPtr.Zero) {
 				ImeNativeWrapper.SetCompositionFont(hwndSource, currentContext, textArea);
 				ImeNativeWrapper.SetCompositionWindow(hwndSource, currentContext, textArea);

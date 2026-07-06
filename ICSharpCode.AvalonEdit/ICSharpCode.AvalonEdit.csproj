@@ -20,7 +20,7 @@
     <AssemblyVersion>6.3.2.0</AssemblyVersion>
     <FileVersion>6.3.2.0</FileVersion>
     <DefineConstants>TRACE</DefineConstants>
-    <UseNuGetPackages>false</UseNuGetPackages>
+    <UseNuGetPackages>true</UseNuGetPackages>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseNuGetPackages)' == 'true'">

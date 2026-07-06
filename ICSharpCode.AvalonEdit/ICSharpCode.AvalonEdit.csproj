@@ -20,12 +20,17 @@
     <AssemblyVersion>6.3.2.0</AssemblyVersion>
     <FileVersion>6.3.2.0</FileVersion>
     <DefineConstants>TRACE</DefineConstants>
+    <UseNuGetPackages>false</UseNuGetPackages>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseNuGetPackages)' == 'true'">
     <!-- Cross-platform IME (macOS NSTextInputClient / Linux IBus) support, consumed by
          Editing/ImeSupport.cs. On real Windows the existing imm32 P/Invoke path is unchanged. -->
-    <ProjectReference Include="..\..\..\..\..\TextCore.Wpf\src\TextCore.Wpf\TextCore.Wpf.csproj" />
+    <PackageReference Include="LeXtudio.UI.Text.Core" Version="1.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseNuGetPackages)' != 'true'">
+    <ProjectReference Include="..\..\..\..\..\TextCore.Uno\src\LeXtudio.UI.Text.Core\LeXtudio.UI.Text.Core.csproj" />
+
   </ItemGroup>
 
   <ItemGroup>

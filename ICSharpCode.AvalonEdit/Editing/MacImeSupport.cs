@@ -1,6 +1,6 @@
-// Cross-platform (non-Windows) IME support for AvalonEdit, backed by TextCore.Wpf's
-// CoreTextEditContext/MacOSTextInputAdapter (ported from TextCore.Uno's NSTextInputClient bridge -
-// see doc comments on LeXtudio.TextCore.Wpf.MacOSTextInputAdapter). ImeSupport.cs still owns the
+// Cross-platform (non-Windows) IME support for AvalonEdit, backed by TextCore.Uno's
+// CoreTextEditContext/MacOSTextInputAdapter (the original NSTextInputClient bridge -
+// see doc comments on LeXtudio.UI.Text.Core.MacOSTextInputAdapter). ImeSupport.cs still owns the
 // Windows imm32 path unchanged; this class is only ever constructed/used when
 // !OperatingSystem.IsWindows().
 
@@ -11,7 +11,7 @@ using System.Windows;
 using System.Windows.Media;
 
 using ICSharpCode.AvalonEdit.Document;
-using LeXtudio.TextCore.Wpf;
+using LeXtudio.UI.Text.Core;
 
 namespace ICSharpCode.AvalonEdit.Editing
 {

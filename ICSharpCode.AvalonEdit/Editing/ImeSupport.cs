@@ -89,7 +89,7 @@ namespace ICSharpCode.AvalonEdit.Editing
 			if (macImeSupport != null) {
 				// ImeNativeWrapper P/Invokes imm32.dll/msctf.dll, which don't exist outside
 				// Windows - the real cross-platform composition path is MacImeSupport
-				// (TextCore.Wpf's CoreTextEditContext/MacOSTextInputAdapter), driven from
+				// (TextCore.Uno's CoreTextEditContext/MacOSTextInputAdapter), driven from
 				// OnGotKeyboardFocus/OnLostKeyboardFocus/UpdateCompositionWindow instead.
 				return;
 			}

@@ -1,12 +1,12 @@
 <Project Sdk="LibreWPF.Sdk/11.0.0-dev">
   <!-- Cross-platform (ProGPU/macOS) adaptation of the upstream AvalonEdit 6.3.2 master csproj:
-       single net11.0-windows target via ProGPU.Wpf.Sdk instead of the upstream
+       single net10.0-windows target via ProGPU.Wpf.Sdk instead of the upstream
        net8.0-windows;net10.0-windows;net462 multi-target, WinForms dropped (the 3 WinForms usages
        in TextArea/InsightWindow/CompletionWindowBase are patched out - see the "stop caring about
        WinForms" comments there), and SourceLink removed (no CI/package publishing here). Resource/
        EmbeddedResource item groups are kept verbatim from upstream master. -->
   <PropertyGroup>
-    <TargetFramework>net11.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>ICSharpCode.AvalonEdit</RootNamespace>
     <AssemblyName>ICSharpCode.AvalonEdit</AssemblyName>
     <UseWPF>true</UseWPF>

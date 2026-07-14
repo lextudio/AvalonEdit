@@ -19,8 +19,10 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -42,6 +44,9 @@ namespace ICSharpCode.AvalonEdit.Editing
 		MouseSelectionMode mode;
 		AnchorSegment startWord;
 		Point possibleDragStartMousePos;
+		static readonly object selectionTraceLock = new object();
+		static bool selectionTraceInitialized;
+		static readonly string selectionTracePath = "/tmp/opendevelop-avalonedit-selection.log";
 
 		#region Constructor + Attach + Detach
 		internal SelectionMouseHandler(TextArea textArea)
@@ -61,8 +66,10 @@ namespace ICSharpCode.AvalonEdit.Editing
 			TextArea textArea = (TextArea)sender;
 			if (Mouse.Captured != textArea) {
 				SelectionMouseHandler handler = textArea.DefaultInputHandler.MouseSelection as SelectionMouseHandler;
-				if (handler != null)
+				if (handler != null) {
+					handler.TraceSelection("lost-capture", e, "captured=" + FormatCaptured());
 					handler.mode = MouseSelectionMode.None;
+				}
 			}
 		}
 
@@ -138,10 +145,79 @@ namespace ICSharpCode.AvalonEdit.Editing
 		void textArea_DocumentChanged(object sender, EventArgs e)
 		{
 			if (mode != MouseSelectionMode.None) {
+				TraceSelection("document-changed-reset", null, null);
 				mode = MouseSelectionMode.None;
 				textArea.ReleaseMouseCapture();
 			}
 			startWord = null;
+		}
+
+		static string FormatCaptured()
+		{
+			object captured = Mouse.Captured;
+			return captured != null ? captured.GetType().FullName : "<null>";
+		}
+
+		internal static bool ShouldCancelSelectionOnMouseMove(MouseSelectionMode mode, MouseButtonState leftButtonState)
+		{
+			if (leftButtonState == MouseButtonState.Pressed)
+				return false;
+			return mode == MouseSelectionMode.Normal
+				|| mode == MouseSelectionMode.WholeWord
+				|| mode == MouseSelectionMode.WholeLine
+				|| mode == MouseSelectionMode.Rectangular
+				|| mode == MouseSelectionMode.PossibleDragStart;
+		}
+
+		void TraceSelection(string eventName, MouseEventArgs e, string details)
+		{
+			try {
+				Point textAreaPos = default(Point);
+				Point textViewPos = default(Point);
+				bool haveTextAreaPos = false;
+				bool haveTextViewPos = false;
+				if (e != null) {
+					textAreaPos = e.GetPosition(textArea);
+					haveTextAreaPos = true;
+					if (textArea.TextView != null) {
+						textViewPos = e.GetPosition(textArea.TextView);
+						haveTextViewPos = true;
+					}
+				}
+
+				string line = string.Format(
+					System.Globalization.CultureInfo.InvariantCulture,
+					"{0:O} tid={1} apt={2} event={3} mode={4} handled={5} left={6} right={7} middle={8} capturedByTextArea={9} capture={10} textArea=({11}) textView=({12}) selEmpty={13} sel=({14},{15}) caret={16} click={17} details={18}",
+					DateTime.UtcNow,
+					Thread.CurrentThread.ManagedThreadId,
+					Thread.CurrentThread.GetApartmentState(),
+					eventName,
+					mode,
+					e != null ? e.Handled.ToString() : "<null>",
+					e != null ? e.LeftButton.ToString() : "<null>",
+					e != null ? e.RightButton.ToString() : "<null>",
+					e != null ? e.MiddleButton.ToString() : "<null>",
+					Mouse.Captured == textArea,
+					FormatCaptured(),
+					haveTextAreaPos ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.0},{1:0.0}", textAreaPos.X, textAreaPos.Y) : "<null>",
+					haveTextViewPos ? string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.0},{1:0.0}", textViewPos.X, textViewPos.Y) : "<null>",
+					textArea.Selection != null ? textArea.Selection.IsEmpty.ToString() : "<null>",
+					textArea.Selection != null ? textArea.Selection.SurroundingSegment.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture) : "<null>",
+					textArea.Selection != null ? textArea.Selection.SurroundingSegment.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) : "<null>",
+					textArea.Caret != null ? textArea.Caret.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture) : "<null>",
+					e is MouseButtonEventArgs buttonArgs ? buttonArgs.ClickCount.ToString(System.Globalization.CultureInfo.InvariantCulture) : "<null>",
+					details ?? string.Empty);
+
+				lock (selectionTraceLock) {
+					if (!selectionTraceInitialized) {
+						selectionTraceInitialized = true;
+						File.AppendAllText(selectionTracePath, Environment.NewLine + "=== AvalonEdit selection trace pid=" + Process.GetCurrentProcess().Id + " ===" + Environment.NewLine);
+					}
+					File.AppendAllText(selectionTracePath, line + Environment.NewLine);
+				}
+			} catch {
+				// Temporary diagnostics must never affect editor input.
+			}
 		}
 		#endregion
 
@@ -294,6 +370,7 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		void StartDrag()
 		{
+			TraceSelection("start-drag", null, null);
 			// mouse capture and Drag'n'Drop doesn't mix
 			textArea.ReleaseMouseCapture();
 
@@ -329,6 +406,13 @@ namespace ICSharpCode.AvalonEdit.Editing
 				} catch (COMException ex) {
 					// ignore COM errors - don't crash on badly implemented drop targets
 					Debug.WriteLine("DoDragDrop failed: " + ex.ToString());
+					return;
+				} catch (ThreadStateException ex) {
+					// Portable/non-OLE hosts may dispatch input on a non-STA thread; in that case
+					// text drag/drop is unavailable, but editing should continue normally.
+					Debug.WriteLine("DoDragDrop unavailable: " + ex.ToString());
+					TraceSelection("dragdrop-threadstate", null, ex.Message);
+					mode = MouseSelectionMode.None;
 					return;
 				}
 				if (resultEffect == DragDropEffects.None) {
@@ -389,9 +473,11 @@ namespace ICSharpCode.AvalonEdit.Editing
 		#region LeftButtonDown
 		void textArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 		{
+			TraceSelection("left-down-enter", e, null);
 			mode = MouseSelectionMode.None;
 			if (textArea.Document == null) {
 				// Avoid entering any selection mode when there's no document attached.
+				TraceSelection("left-down-no-document", e, null);
 				return;
 			}
 			if (!e.Handled && e.ChangedButton == MouseButton.Left) {
@@ -405,6 +491,7 @@ namespace ICSharpCode.AvalonEdit.Editing
 						if (textArea.CaptureMouse()) {
 							mode = MouseSelectionMode.PossibleDragStart;
 							possibleDragStartMousePos = e.GetPosition(textArea);
+							TraceSelection("mode-possible-drag-start", e, "offset=" + offset);
 						}
 						e.Handled = true;
 						return;
@@ -421,11 +508,13 @@ namespace ICSharpCode.AvalonEdit.Editing
 				if (textArea.CaptureMouse()) {
 					if ((modifiers & ModifierKeys.Alt) == ModifierKeys.Alt && textArea.Options.EnableRectangularSelection) {
 						mode = MouseSelectionMode.Rectangular;
+						TraceSelection("mode-rectangular", e, null);
 						if (shift && textArea.Selection is RectangleSelection) {
 							textArea.Selection = textArea.Selection.StartSelectionOrSetEndpoint(oldPosition, textArea.Caret.Position);
 						}
 					} else if (e.ClickCount == 1 && ((modifiers & ModifierKeys.Control) == 0)) {
 						mode = MouseSelectionMode.Normal;
+						TraceSelection("mode-normal", e, null);
 						if (shift && !(textArea.Selection is RectangleSelection)) {
 							textArea.Selection = textArea.Selection.StartSelectionOrSetEndpoint(oldPosition, textArea.Caret.Position);
 						}
@@ -433,12 +522,15 @@ namespace ICSharpCode.AvalonEdit.Editing
 						SimpleSegment startWord;
 						if (e.ClickCount == 3) {
 							mode = MouseSelectionMode.WholeLine;
+							TraceSelection("mode-whole-line", e, null);
 							startWord = GetLineAtMousePosition(e);
 						} else {
 							mode = MouseSelectionMode.WholeWord;
+							TraceSelection("mode-whole-word", e, null);
 							startWord = GetWordAtMousePosition(e);
 						}
 						if (startWord == SimpleSegment.Invalid) {
+							TraceSelection("invalid-start-segment-reset", e, null);
 							mode = MouseSelectionMode.None;
 							textArea.ReleaseMouseCapture();
 							return;
@@ -463,6 +555,7 @@ namespace ICSharpCode.AvalonEdit.Editing
 		public MouseSelectionMode MouseSelectionMode {
 			get { return mode; }
 			set {
+				TraceSelection("mode-property-set", null, "value=" + value);
 				if (mode == value)
 					return;
 				if (value == MouseSelectionMode.None) {
@@ -583,17 +676,31 @@ namespace ICSharpCode.AvalonEdit.Editing
 				return;
 			if (mode == MouseSelectionMode.Normal || mode == MouseSelectionMode.WholeWord || mode == MouseSelectionMode.WholeLine || mode == MouseSelectionMode.Rectangular) {
 				e.Handled = true;
+				if (ShouldCancelSelectionOnMouseMove(mode, e.LeftButton)) {
+					TraceSelection("stale-selection-mode-reset", e, null);
+					mode = MouseSelectionMode.None;
+					textArea.ReleaseMouseCapture();
+					return;
+				}
 				if (textArea.TextView.VisualLinesValid) {
 					// If the visual lines are not valid, don't extend the selection.
 					// Extending the selection forces a VisualLine refresh, and it is sufficient
 					// to do that on MouseUp, we don't have to do it every MouseMove.
+					TraceSelection("extend-selection", e, null);
 					ExtendSelectionToMouse(e);
 				}
 			} else if (mode == MouseSelectionMode.PossibleDragStart) {
 				e.Handled = true;
+				if (ShouldCancelSelectionOnMouseMove(mode, e.LeftButton)) {
+					TraceSelection("stale-possible-drag-reset", e, null);
+					mode = MouseSelectionMode.None;
+					textArea.ReleaseMouseCapture();
+					return;
+				}
 				Vector mouseMovement = e.GetPosition(textArea) - possibleDragStartMousePos;
 				if (Math.Abs(mouseMovement.X) > SystemParameters.MinimumHorizontalDragDistance
 					|| Math.Abs(mouseMovement.Y) > SystemParameters.MinimumVerticalDragDistance) {
+					TraceSelection("drag-threshold", e, "dx=" + mouseMovement.X.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",dy=" + mouseMovement.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
 					StartDrag();
 				}
 			}
@@ -657,6 +764,7 @@ namespace ICSharpCode.AvalonEdit.Editing
 		#region MouseLeftButtonUp
 		void textArea_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
 		{
+			TraceSelection("left-up-enter", e, null);
 			if (mode == MouseSelectionMode.None || e.Handled)
 				return;
 			e.Handled = true;
@@ -669,6 +777,7 @@ namespace ICSharpCode.AvalonEdit.Editing
 			}
 			mode = MouseSelectionMode.None;
 			textArea.ReleaseMouseCapture();
+			TraceSelection("left-up-reset", e, null);
 		}
 		#endregion
 	}

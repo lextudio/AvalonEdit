@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2009 Daniel Grunwald
+﻿// Copyright (c) 2014 AlphaSierraPapa for the SharpDevelop Team
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this
 // software and associated documentation files (the "Software"), to deal in the Software
@@ -16,42 +16,16 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using System;
-using System.Windows;
-using LeXtudio.DevFlow.Agent.Core;
-using LeXtudio.DevFlow.Agent.WPF;
-using Microsoft.Maui.DevFlow.Agent.Core;
+using NUnitLite;
 
-namespace ICSharpCode.AvalonEdit.Sample
+namespace ICSharpCode.AvalonEdit.Tests
 {
-	/// <summary>
-	/// Interaction logic for App.xaml
-	/// </summary>
-	public partial class App : Application
+	public static class Program
 	{
-		WpfAgentService devFlowService;
-
-		public App()
+		[System.STAThread]
+		public static int Main(string[] args)
 		{
-			InitializeComponent();
-		}
-
-		protected override void OnStartup(StartupEventArgs e)
-		{
-			base.OnStartup(e);
-			devFlowService = this.AddWpfDevFlowAgent(new AgentOptions
-			{
-				Port = GetAgentPort()
-			});
-		}
-
-		static int GetAgentPort()
-		{
-			string portValue = Environment.GetEnvironmentVariable("DEVFLOW_AGENT_PORT");
-			if (int.TryParse(portValue, out int parsedPort) && parsedPort > 0)
-				return parsedPort;
-
-			return DevFlowAgentPortResolver.GetPortFromAssemblyMetadata() ?? AgentOptions.DefaultPort;
+			return new AutoRun().Execute(args);
 		}
 	}
 }

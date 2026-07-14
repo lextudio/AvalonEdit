@@ -67,7 +67,9 @@ namespace ICSharpCode.AvalonEdit.Editing
 			InputBindings.Add(TextAreaDefaultInputHandler.CreateFrozenKeyBinding(EditingCommands.Backspace, ModifierKeys.Shift, Key.Back)); // make Shift-Backspace do the same as plain backspace
 			AddBinding(EditingCommands.DeletePreviousWord, ModifierKeys.Control, Key.Back, OnDelete(CaretMovementType.WordLeft));
 			AddBinding(EditingCommands.EnterParagraphBreak, ModifierKeys.None, Key.Enter, OnEnter);
+			AddBinding(EditingCommands.EnterParagraphBreak, ModifierKeys.None, Key.Return, OnEnter);
 			AddBinding(EditingCommands.EnterLineBreak, ModifierKeys.Shift, Key.Enter, OnEnter);
+			AddBinding(EditingCommands.EnterLineBreak, ModifierKeys.Shift, Key.Return, OnEnter);
 			AddBinding(EditingCommands.TabForward, ModifierKeys.None, Key.Tab, OnTab);
 			AddBinding(EditingCommands.TabBackward, ModifierKeys.Shift, Key.Tab, OnShiftTab);
 

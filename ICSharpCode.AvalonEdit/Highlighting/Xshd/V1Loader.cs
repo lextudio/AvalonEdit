@@ -139,11 +139,15 @@ namespace ICSharpCode.AvalonEdit.Highlighting.Xshd
 				int g = Int32.Parse(c.Substring(3 + offset, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 				int b = Int32.Parse(c.Substring(5 + offset, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 				return new SimpleHighlightingBrush(Color.FromArgb((byte)a, (byte)r, (byte)g, (byte)b));
-			} else if (c.StartsWith("SystemColors.", StringComparison.Ordinal)) {
-				return V2Loader.GetSystemColorBrush(null, c);
-			} else {
-				return new SimpleHighlightingBrush((Color)V2Loader.ColorConverter.ConvertFromInvariantString(c));
-			}
+		} else if (c.StartsWith("SystemColors.", StringComparison.Ordinal)) {
+			return V2Loader.GetSystemColorBrush(null, c);
+		} else {
+#if !WINDOWS_APP_SDK
+			if (V2Loader.KnownNamedColors.TryGetValue(c, out var hexColor))
+				c = hexColor;
+#endif
+			return new SimpleHighlightingBrush((Color)V2Loader.ColorConverter.ConvertFromInvariantString(c));
+		}
 		}
 
 		char ruleSetEscapeCharacter;

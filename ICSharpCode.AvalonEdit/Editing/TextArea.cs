@@ -1035,8 +1035,6 @@ namespace ICSharpCode.AvalonEdit.Editing
 
 		#region Hide Mouse Cursor While Typing
 
-		bool isMouseCursorHidden;
-
 		void AttachTypingEvents()
 		{
 			// Use the PreviewMouseMove event in case some other editor layer consumes the MouseMove event (e.g. SD's InsertionCursorLayer)
@@ -1052,7 +1050,6 @@ namespace ICSharpCode.AvalonEdit.Editing
 		{
 			// WinForms Cursor.Show/Hide has no cross-platform WPF equivalent; hide-while-typing
 			// is a cosmetic feature only, so it's simply disabled here (stop caring about WinForms).
-			this.isMouseCursorHidden = false;
 		}
 
 		void HideMouseCursor()

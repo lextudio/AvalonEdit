@@ -68,6 +68,7 @@ namespace ICSharpCode.AvalonEdit.Rendering
 			elementGenerators = new ObserveAddRemoveCollection<VisualLineElementGenerator>(ElementGenerator_Added, ElementGenerator_Removed);
 			lineTransformers = new ObserveAddRemoveCollection<IVisualLineTransformer>(LineTransformer_Added, LineTransformer_Removed);
 			backgroundRenderers = new ObserveAddRemoveCollection<IBackgroundRenderer>(BackgroundRenderer_Added, BackgroundRenderer_Removed);
+			blockAdornmentGenerators = new ObserveAddRemoveCollection<IVisualLineBlockAdornmentGenerator>(BlockAdornmentGenerator_Added, BlockAdornmentGenerator_Removed);
 			columnRulerRenderer = new ColumnRulerRenderer(this);
 			currentLineHighlighRenderer = new CurrentLineHighlightRenderer(this);
 			this.Options = new TextEditorOptions();
@@ -425,7 +426,7 @@ namespace ICSharpCode.AvalonEdit.Rendering
 
 		/// <inheritdoc/>
 		protected override int VisualChildrenCount {
-			get { return layers.Count + inlineObjects.Count; }
+			get { return layers.Count + inlineObjects.Count + blockAdornmentRuns.Count; }
 		}
 
 		/// <inheritdoc/>
@@ -436,14 +437,18 @@ namespace ICSharpCode.AvalonEdit.Rendering
 				return layers[index];
 			else if (index < cut + inlineObjects.Count)
 				return inlineObjects[index - cut].Element;
+			else if (index < cut + inlineObjects.Count + blockAdornmentRuns.Count)
+				return blockAdornmentRuns[index - cut - inlineObjects.Count].Element;
 			else
-				return layers[index - inlineObjects.Count];
+				return layers[index - inlineObjects.Count - blockAdornmentRuns.Count];
 		}
 
 		/// <inheritdoc/>
 		protected override System.Collections.IEnumerator LogicalChildren {
 			get {
-				return inlineObjects.Select(io => io.Element).Concat(layers.Cast<UIElement>()).GetEnumerator();
+				return inlineObjects.Select(io => io.Element)
+					.Concat(blockAdornmentRuns.Select(r => r.Element))
+					.Concat(layers.Cast<UIElement>()).GetEnumerator();
 			}
 		}
 		#endregion
@@ -547,6 +552,73 @@ namespace ICSharpCode.AvalonEdit.Rendering
 			ior.VisualLine = null;
 			if (!keepElement)
 				RemoveVisualChild(ior.Element);
+		}
+		#endregion
+
+		#region Block adornment handling
+		/// <summary>One <see cref="IVisualLineBlockAdornment"/>'s live visual, tracked so it can be
+		/// arranged (doc §14.2) and torn down when its <see cref="VisualLine"/> is disposed.</summary>
+		sealed class BlockAdornmentRun
+		{
+			public VisualLine VisualLine;
+			public IVisualLineBlockAdornment Adornment;
+			public UIElement Element;
+		}
+
+		List<BlockAdornmentRun> blockAdornmentRuns = new List<BlockAdornmentRun>();
+
+		/// <summary>
+		/// Asks every registered <see cref="IVisualLineBlockAdornmentGenerator"/> for adornments on
+		/// <paramref name="visualLine"/>'s first document line, adds their visuals to the tree, and
+		/// folds their total height into the visual line via
+		/// <see cref="VisualLine.AddBlockAdornmentHeight"/> - called once per visual-line
+		/// construction, right after <c>SetTextLines</c>, before the combined height is fed to the
+		/// height tree (<c>TextView.BuildVisualLine</c>).
+		/// </summary>
+		void AddBlockAdornments(VisualLine visualLine)
+		{
+			if (blockAdornmentGenerators.Count == 0)
+				return;
+			foreach (var generator in blockAdornmentGenerators) {
+				var adornments = generator.GetBlockAdornments(this, visualLine.FirstDocumentLine);
+				if (adornments == null)
+					continue;
+				foreach (var adornment in adornments) {
+					var element = adornment.CreateVisual();
+					if (element == null)
+						continue;
+					var run = new BlockAdornmentRun { VisualLine = visualLine, Adornment = adornment, Element = element };
+					blockAdornmentRuns.Add(run);
+					AddVisualChild(element);
+					element.Measure(new Size(double.PositiveInfinity, adornment.DesiredHeight));
+					visualLine.AddBlockAdornmentHeight(adornment.DesiredHeight);
+				}
+			}
+		}
+
+		List<VisualLine> visualLinesWithOutstandingBlockAdornments = new List<VisualLine>();
+
+		void RemoveBlockAdornments(VisualLine visualLine)
+		{
+			// Delayed removal, matching RemoveInlineObjects: an edit invalidates a visual line
+			// immediately but redraw happens later, and removing the adornment's visual right away
+			// would flicker it out and back in if the line gets reconstructed with the same anchor.
+			if (blockAdornmentRuns.Any(r => r.VisualLine == visualLine))
+				visualLinesWithOutstandingBlockAdornments.Add(visualLine);
+		}
+
+		void RemoveBlockAdornmentsNow()
+		{
+			if (visualLinesWithOutstandingBlockAdornments.Count == 0)
+				return;
+			blockAdornmentRuns.RemoveAll(r => {
+				if (visualLinesWithOutstandingBlockAdornments.Contains(r.VisualLine)) {
+					RemoveVisualChild(r.Element);
+					return true;
+				}
+				return false;
+			});
+			visualLinesWithOutstandingBlockAdornments.Clear();
 		}
 		#endregion
 
@@ -733,6 +805,7 @@ namespace ICSharpCode.AvalonEdit.Rendering
 			visibleVisualLines = null;
 			visualLine.Dispose();
 			RemoveInlineObjects(visualLine);
+			RemoveBlockAdornments(visualLine);
 		}
 		#endregion
 
@@ -937,6 +1010,7 @@ namespace ICSharpCode.AvalonEdit.Rendering
 
 			// remove inline objects only at the end, so that inline objects that were re-used are not removed from the editor
 			RemoveInlineObjectsNow();
+			RemoveBlockAdornmentsNow();
 
 			maxWidth += AdditionalHorizontalScrollAmount;
 			double heightTreeHeight = this.DocumentHeight;
@@ -1136,6 +1210,7 @@ namespace ICSharpCode.AvalonEdit.Rendering
 				lastLineBreak = textLine.GetTextLineBreak();
 			}
 			visualLine.SetTextLines(textLines);
+			AddBlockAdornments(visualLine);
 			heightTree.SetHeight(visualLine.FirstDocumentLine, visualLine.Height);
 			return visualLine;
 		}
@@ -1193,6 +1268,21 @@ namespace ICSharpCode.AvalonEdit.Rendering
 			if (visibleVisualLines != null) {
 				Point pos = new Point(-scrollOffset.X, -clippedPixelsOnTop);
 				foreach (VisualLine visualLine in visibleVisualLines) {
+					// Arrange this line's block adornments (if any) stacked in the reserved space at
+					// the top of its row, then advance pos.Y past them - mirrors the same
+					// BlockAdornmentHeight offset VisualLineDrawingVisual's own drawing already
+					// applies, so the inline-object arrangement below and the rendered text stay in
+					// sync (doc §14.2).
+					double adornmentY = pos.Y;
+					foreach (var run in blockAdornmentRuns) {
+						if (run.VisualLine != visualLine)
+							continue;
+						double height = run.Adornment.DesiredHeight;
+						run.Element.Arrange(new Rect(new Point(pos.X, adornmentY), new Size(finalSize.Width, height)));
+						adornmentY += height;
+					}
+					pos.Y = adornmentY;
+
 					int offset = 0;
 					foreach (TextLine textLine in visualLine.TextLines) {
 						foreach (var span in textLine.GetTextRunSpans()) {
@@ -1234,6 +1324,27 @@ namespace ICSharpCode.AvalonEdit.Rendering
 		{
 			DisconnectFromTextView(renderer);
 			InvalidateLayer(renderer.Layer);
+		}
+
+		readonly ObserveAddRemoveCollection<IVisualLineBlockAdornmentGenerator> blockAdornmentGenerators;
+
+		/// <summary>
+		/// Gets the list of block-adornment generators (doc/technotes/codelens.md §14.2) - e.g. the
+		/// OpenLens host registers one here to reserve a row above each declaration line. Adding or
+		/// removing a generator redraws the view, same as <see cref="ElementGenerators"/>.
+		/// </summary>
+		public IList<IVisualLineBlockAdornmentGenerator> BlockAdornmentGenerators {
+			get { return blockAdornmentGenerators; }
+		}
+
+		void BlockAdornmentGenerator_Added(IVisualLineBlockAdornmentGenerator generator)
+		{
+			Redraw();
+		}
+
+		void BlockAdornmentGenerator_Removed(IVisualLineBlockAdornmentGenerator generator)
+		{
+			Redraw();
 		}
 
 		/// <inheritdoc/>

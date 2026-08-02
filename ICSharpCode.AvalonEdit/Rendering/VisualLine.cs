@@ -111,12 +111,38 @@ namespace ICSharpCode.AvalonEdit.Rendering
 		}
 
 		/// <summary>
-		/// Gets the height of the visual line in device-independent pixels.
+		/// Gets the height of the visual line in device-independent pixels. Includes
+		/// <see cref="BlockAdornmentHeight"/> - the reserved space above the line's own text
+		/// contributed by registered <see cref="IVisualLineBlockAdornmentGenerator"/>s (e.g. OpenLens),
+		/// if any.
 		/// </summary>
 		public double Height { get; private set; }
 
 		/// <summary>
+		/// Gets the total height reserved above this visual line's own text for block adornments
+		/// (doc/technotes/codelens.md §14.2). Zero if no generator produced an adornment for
+		/// <see cref="FirstDocumentLine"/>. Included in <see cref="Height"/> - see
+		/// <see cref="TextView.BlockAdornmentGenerators"/>.
+		/// </summary>
+		public double BlockAdornmentHeight { get; private set; }
+
+		/// <summary>
+		/// Adds <paramref name="height"/> to both <see cref="BlockAdornmentHeight"/> and
+		/// <see cref="Height"/>. Called once by <c>TextView.BuildVisualLine</c> right after
+		/// <see cref="SetTextLines"/>, before the combined height is fed to the height tree that
+		/// drives scrolling/hit-testing - so reserved lens space is included in document layout the
+		/// same way a wrapped line's extra rows already are.
+		/// </summary>
+		internal void AddBlockAdornmentHeight(double height)
+		{
+			BlockAdornmentHeight += height;
+			Height += height;
+		}
+
+		/// <summary>
 		/// Gets the Y position of the line. This is measured in device-independent pixels relative to the start of the document.
+		/// Points at the top of the reserved <see cref="BlockAdornmentHeight"/> region (if any), not
+		/// at the first line of actual text - see <see cref="GetTextLineVisualYPosition"/>.
 		/// </summary>
 		public double VisualTop { get; internal set; }
 
@@ -351,7 +377,11 @@ namespace ICSharpCode.AvalonEdit.Rendering
 		{
 			if (textLine == null)
 				throw new ArgumentNullException("textLine");
-			double pos = VisualTop;
+			// VisualTop is the top of the whole row, including any reserved block-adornment space -
+			// the line's actual text starts BlockAdornmentHeight below that (doc §14.2), so every
+			// caller of this (line-number margin alignment, caret rendering, IME popups, ...) lands
+			// on the real text row rather than inside the reserved lens space above it.
+			double pos = VisualTop + BlockAdornmentHeight;
 			foreach (TextLine tl in TextLines) {
 				if (tl == textLine) {
 					switch (yPositionMode) {
@@ -748,7 +778,10 @@ namespace ICSharpCode.AvalonEdit.Rendering
 		{
 			this.VisualLine = visualLine;
 			var drawingContext = RenderOpen();
-			double pos = 0;
+			// Leave BlockAdornmentHeight blank at the top - TextView arranges the block adornment's
+			// own UIElement into that space separately (see TextView.ArrangeOverride), this visual
+			// only ever draws the line's actual text below it.
+			double pos = visualLine.BlockAdornmentHeight;
 			foreach (TextLine textLine in visualLine.TextLines) {
 				if (flow == FlowDirection.LeftToRight) {
 				textLine.Draw(drawingContext, new Point(0, pos), InvertAxes.None);

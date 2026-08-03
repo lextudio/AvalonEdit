@@ -97,7 +97,16 @@ namespace ICSharpCode.AvalonEdit.Editing
 						lineNumber.ToString(CultureInfo.CurrentCulture),
 						typeface, emSize, foreground
 					);
-					double y = line.GetTextLineVisualYPosition(line.TextLines[0], VisualYPosition.TextTop);
+					// Center the number within the *whole* visual line's row height (line.Height),
+					// not just aligned to the top of its first TextLine's text bounds
+					// (VisualYPosition.TextTop). The two only coincide when every line has the same
+					// height - a highlighting definition that varies FontSize per line (e.g.
+					// Markdown headings rendered several points larger than body text, see
+					// MarkDownWithFontSize-Mode.xshd) makes some VisualLines much taller than the
+					// margin's own fixed-size digits, and top-aligning left the number sitting at
+					// the very top of a tall heading row instead of level with its text - looking
+					// disconnected from the line it labels whenever row heights are mixed.
+					double y = line.VisualTop + (line.Height - text.Height) / 2;
 					drawingContext.DrawText(text, new Point(renderSize.Width - text.Width, y - textView.VerticalOffset));
 				}
 			}

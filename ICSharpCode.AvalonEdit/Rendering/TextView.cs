@@ -1278,7 +1278,18 @@ namespace ICSharpCode.AvalonEdit.Rendering
 						if (run.VisualLine != visualLine)
 							continue;
 						double height = run.Adornment.DesiredHeight;
-						run.Element.Arrange(new Rect(new Point(pos.X, adornmentY), new Size(finalSize.Width, height)));
+						// Align the adornment's content to its declaration's indentation column
+						// (Visual Studio CodeLens style) instead of always starting at the left
+						// edge; -1 keeps the old left-edge behavior.
+						double adornmentX = pos.X;
+						if (run.Adornment.AlignToColumn >= 0) {
+							int visualColumn = visualLine.GetVisualColumn(run.Adornment.AlignToColumn);
+							TextLine textLine = visualLine.GetTextLine(visualColumn);
+							if (textLine != null)
+								adornmentX += visualLine.GetTextLineVisualXPosition(textLine, visualColumn);
+						}
+						run.Element.Arrange(new Rect(new Point(adornmentX, adornmentY),
+							new Size(Math.Max(0, finalSize.Width - (adornmentX - pos.X)), height)));
 						adornmentY += height;
 					}
 					pos.Y = adornmentY;

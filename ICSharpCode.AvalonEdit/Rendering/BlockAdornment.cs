@@ -49,6 +49,15 @@ namespace ICSharpCode.AvalonEdit.Rendering
 		double DesiredHeight { get; }
 
 		/// <summary>
+		/// The 0-based document column (within the adornment's document line) whose pixel position
+		/// the adornment's content should be aligned to - i.e. the declaration's own indentation,
+		/// like Visual Studio's CodeLens rows. The host shifts the arranged element so its content
+		/// starts at that column's x position on the reserved row. Return -1 to keep the content
+		/// at the left edge.
+		/// </summary>
+		int AlignToColumn { get; }
+
+		/// <summary>
 		/// Creates the visual to arrange into the reserved space. Called at most once per
 		/// visual-line (re)construction - not on every render pass - so implementations may do
 		/// lightweight setup here (event handler wiring etc.) without worrying about being called

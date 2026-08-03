@@ -71,6 +71,7 @@ namespace ICSharpCode.AvalonEdit.Rendering
 			public FixedHeightAdornment(double height) => DesiredHeight = height;
 			public object Key => "fixed";
 			public double DesiredHeight { get; }
+			public int AlignToColumn => -1;
 			public UIElement CreateVisual() => new Border { Width = 10, Height = DesiredHeight };
 		}
 

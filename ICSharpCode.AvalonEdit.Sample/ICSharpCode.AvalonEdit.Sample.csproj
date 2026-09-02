@@ -15,8 +15,8 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\ICSharpCode.AvalonEdit\ICSharpCode.AvalonEdit.csproj" />
-		<ProjectReference Include="/Users/lextm/uno-tools/wpf-labs/src/DevFlow/LeXtudio.DevFlow.Agent.Core/LeXtudio.DevFlow.Agent.Core.csproj" />
-		<ProjectReference Include="/Users/lextm/uno-tools/wpf-labs/src/DevFlow/LeXtudio.DevFlow.Agent.WPF/LeXtudio.DevFlow.Agent.WPF.csproj" />
+		<PackageReference Include="LeXtudio.DevFlow.Agent.Core" Version="0.2.5" />
+		<PackageReference Include="LeXtudio.DevFlow.Agent.Wpf" Version="0.2.5" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove="Images\*" />

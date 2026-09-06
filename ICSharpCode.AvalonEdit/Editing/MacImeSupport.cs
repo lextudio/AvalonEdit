@@ -47,6 +47,10 @@ namespace ICSharpCode.AvalonEdit.Editing
 			Window window = Window.GetWindow(textArea);
 			if (window == null)
 				return;
+			// Guard against the Visual tree being disconnected (e.g. during file-switch)
+			// — TransformToAncestor throws InvalidOperationException in that case.
+			if (!textArea.IsLoaded || !window.IsLoaded)
+				return;
 
 			Rect caretRect = textArea.Caret.CalculateCaretRectangle();
 			if (caretRect.IsEmpty)

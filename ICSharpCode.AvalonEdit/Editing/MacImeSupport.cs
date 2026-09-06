@@ -47,17 +47,19 @@ namespace ICSharpCode.AvalonEdit.Editing
 			Window window = Window.GetWindow(textArea);
 			if (window == null)
 				return;
-			// Guard against the Visual tree being disconnected (e.g. during file-switch)
-			// — TransformToAncestor throws InvalidOperationException in that case.
-			if (!textArea.IsLoaded || !window.IsLoaded)
-				return;
 
 			Rect caretRect = textArea.Caret.CalculateCaretRectangle();
 			if (caretRect.IsEmpty)
 				return;
 			caretRect.Offset(-textArea.TextView.ScrollOffset.X, -textArea.TextView.ScrollOffset.Y);
 
-			GeneralTransform transform = textArea.TextView.TransformToAncestor(window);
+			GeneralTransform transform;
+			try {
+				transform = textArea.TextView.TransformToAncestor(window);
+			} catch (InvalidOperationException) {
+				// Visual tree disconnected during file-switch — safe to ignore.
+				return;
+			}
 			Rect windowRect = transform.TransformBounds(caretRect);
 
 			double dpiScale = VisualTreeHelper.GetDpi(textArea).DpiScaleX;

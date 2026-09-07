@@ -206,6 +206,11 @@ namespace ICSharpCode.AvalonEdit.Highlighting
 			return GetSpanStack(lineNumber).Select(s => s.SpanColor).Where(s => s != null);
 		}
 
+		/// <inheritdoc/>
+		public bool IsDisposed {
+			get { return isDisposed; }
+		}
+
 		void CheckIsHighlighting()
 		{
 			if (isDisposed) {

@@ -30,6 +30,17 @@ namespace ICSharpCode.AvalonEdit.Highlighting
 	public interface IHighlighter : IDisposable
 	{
 		/// <summary>
+		/// Whether Dispose has already run, so a caller can skip driving this highlighter instead of
+		/// provoking an ObjectDisposedException. Needed because highlighting is driven from layout
+		/// (HighlightingColorizer.textView_VisualLineConstructionStarting) and layout can still be
+		/// re-entered from queued input work after the editor is torn down - WPF's own
+		/// HitTestInvalidatedAsyncCallback -> MouseDevice.Synchronize -> TextView.OnQueryCursor path
+		/// measured crashing the IDE this way. Defaults to false for implementations with no
+		/// meaningful disposed state.
+		/// </summary>
+		bool IsDisposed => false;
+
+		/// <summary>
 		/// Gets the underlying text document.
 		/// </summary>
 		IDocument Document { get; }

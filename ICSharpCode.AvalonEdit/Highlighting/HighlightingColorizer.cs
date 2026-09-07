@@ -158,7 +158,13 @@ namespace ICSharpCode.AvalonEdit.Highlighting
 
 		void textView_VisualLineConstructionStarting(object sender, VisualLineConstructionStartEventArgs e)
 		{
-			if (highlighter != null) {
+			// IsDisposed, not just null: highlighting is driven from LAYOUT, and layout can be
+			// re-entered from queued input work long after the editor that owns the highlighter was
+			// torn down. WPF's own HitTestInvalidatedAsyncCallback -> MouseDevice.Synchronize ->
+			// TextView.OnQueryCursor -> EnsureVisualLines path was measured crashing the IDE with
+			// "ObjectDisposedException: DocumentHighlighter" through exactly this handler. There is
+			// nothing to colorize for a dead document, so skip rather than throw.
+			if (highlighter != null && !highlighter.IsDisposed) {
 				// Force update of highlighting state up to the position where we start generating visual lines.
 				// This is necessary in case the document gets modified above the FirstLineInView so that the highlighting state changes.
 				// We need to detect this case and issue a redraw (through OnHighlightStateChanged)
@@ -178,6 +184,12 @@ namespace ICSharpCode.AvalonEdit.Highlighting
 
 		void textView_VisualLinesChanged(object sender, EventArgs e)
 		{
+			if (highlighter != null && highlighter.IsDisposed) {
+				// The group can no longer be closed on a disposed highlighter; drop the flag so a
+				// later live highlighter is not refused with "group already open".
+				isInHighlightingGroup = false;
+				return;
+			}
 			if (highlighter != null && isInHighlightingGroup) {
 				highlighter.EndHighlighting();
 				isInHighlightingGroup = false;
@@ -192,7 +204,9 @@ namespace ICSharpCode.AvalonEdit.Highlighting
 			this.lastColorizedLine = null;
 			base.Colorize(context);
 			if (this.lastColorizedLine != context.VisualLine.LastDocumentLine) {
-				if (highlighter != null) {
+				// See textView_VisualLineConstructionStarting on why disposal has to be checked
+				// here as well: this too runs from layout, which outlives the highlighter.
+				if (highlighter != null && !highlighter.IsDisposed) {
 					// In some cases, it is possible that we didn't highlight the last document line within the visual line
 					// (e.g. when the line ends with a fold marker).
 					// But even if we didn't highlight it, we'll have to update the highlighting state for it so that the
@@ -210,7 +224,7 @@ namespace ICSharpCode.AvalonEdit.Highlighting
 		/// <inheritdoc/>
 		protected override void ColorizeLine(DocumentLine line)
 		{
-			if (highlighter != null) {
+			if (highlighter != null && !highlighter.IsDisposed) {
 				lineNumberBeingColorized = line.LineNumber;
 				HighlightedLine hl = highlighter.HighlightLine(lineNumberBeingColorized);
 				lineNumberBeingColorized = 0;

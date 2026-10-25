@@ -26,7 +26,7 @@ using NUnit.Framework;
 // If you need to expose a type to COM, use [ComVisible(true)] on that type.
 [assembly: ComVisible(false)]
 
-#if !NETCOREAPP
+#if !NETCOREAPP || WINDOWS_TEST_HOST
 // Run unit tests on STA thread.
 [assembly: Apartment(ApartmentState.STA)]
 #endif

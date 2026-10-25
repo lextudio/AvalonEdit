@@ -8,6 +8,8 @@
     <NoWarn>$(NoWarn);CA1416</NoWarn>
     <UseWPF>true</UseWPF>
     <DefineConstants>TRACE</DefineConstants>
+    <!-- NUnit needs STA for Windows WPF tests; COM apartments are unavailable on macOS. -->
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(DefineConstants);WINDOWS_TEST_HOST</DefineConstants>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>..\ICSharpCode.AvalonEdit\ICSharpCode.AvalonEdit.snk</AssemblyOriginatorKeyFile>
     <Company>ic#code</Company>

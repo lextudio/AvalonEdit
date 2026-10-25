@@ -96,4 +96,8 @@ jobs:
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: dotnet nuget push nupkg/ICSharpCode.AvalonEdit.LibreWPF.*.nupkg --api-key $env:GITHUB_TOKEN --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
+        run: |
+          $packages = @(Get-ChildItem nupkg -Filter 'ICSharpCode.AvalonEdit.LibreWPF.*.nupkg' -File -ErrorAction Stop)
+          if ($packages.Count -ne 1) { throw "Expected one validated AvalonEdit package, found $($packages.Count)." }
+          dotnet nuget push $packages[0].FullName --api-key $env:GITHUB_TOKEN --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

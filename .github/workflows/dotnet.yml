@@ -1,92 +1,98 @@
-name: Build AvalonEdit
+name: Build and publish LibreWPF AvalonEdit
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
-    branches: [ master ]
+    branches: [master]
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
 jobs:
-  build:
-
-    runs-on: windows-latest
+  validate:
+    name: Validate (${{ matrix.name }})
     strategy:
+      fail-fast: false
       matrix:
-        Configuration: [ Debug, Release ]
-    env:
-        Solution: '**/ICSharpCode.AvalonEdit.sln'
-        BuildPlatform: 'Any CPU'
-        BuildVersion: '6.3.2'
-
+        include:
+          - name: windows-x64
+            runner: windows-2025
+            test: true
+          - name: macos-arm64
+            runner: macos-15
+            test: true
+    runs-on: ${{ matrix.runner }}
     steps:
-    - uses: actions/checkout@v6
-    - name: Update project version
-      uses: roryprimrose/set-vs-sdk-project-version@v1
-      with:
-        projectFilter: '**/ICSharpCode.AvalonEdit.csproj'
-        version: ${{ env.BuildVersion }}.${{ github.run_number }}
-        assemblyVersion: ${{ env.BuildVersion }}.${{ github.run_number }}
-        fileVersion: ${{ env.BuildVersion }}.${{ github.run_number }}    
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Prepare GitHub Packages restore access
+        shell: pwsh
+        run: |
+          Copy-Item NuGet.config "$env:RUNNER_TEMP/NuGet.config"
+          dotnet nuget update source lextudio-github --username $env:GITHUB_ACTOR --password $env:GITHUB_TOKEN --store-password-in-clear-text --configfile "$env:RUNNER_TEMP/NuGet.config"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore ICSharpCode.AvalonEdit/ICSharpCode.AvalonEdit.csproj --configfile "$env:RUNNER_TEMP/NuGet.config"
+          dotnet restore ICSharpCode.AvalonEdit.Tests/ICSharpCode.AvalonEdit.Tests.csproj --configfile "$env:RUNNER_TEMP/NuGet.config"
+      - name: Build
+        run: dotnet build ICSharpCode.AvalonEdit/ICSharpCode.AvalonEdit.csproj -c Release --no-restore
+      - name: Pack
+        shell: pwsh
+        run: |
+          dotnet pack ICSharpCode.AvalonEdit/ICSharpCode.AvalonEdit.csproj -c Release --no-build -o nupkg
+          [xml]$project = Get-Content ICSharpCode.AvalonEdit/ICSharpCode.AvalonEdit.csproj
+          $version = @($project.Project.PropertyGroup | Where-Object { $_.Version })[0].Version
+          $packages = @(Get-ChildItem nupkg/ICSharpCode.AvalonEdit.LibreWPF.*.nupkg)
+          if ($packages.Count -ne 1 -or $packages[0].Name -ne "ICSharpCode.AvalonEdit.LibreWPF.$version.nupkg") {
+            throw "Expected exactly ICSharpCode.AvalonEdit.LibreWPF.$version.nupkg, found: $($packages.Name -join ', ')."
+          }
+      - name: Upload validated package
+        if: matrix.name == 'windows-x64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: avalonedit-nupkg
+          path: nupkg/ICSharpCode.AvalonEdit.LibreWPF.*.nupkg
+          if-no-files-found: error
+      - name: Test
+        if: matrix.test
+        run: dotnet test ICSharpCode.AvalonEdit.Tests/ICSharpCode.AvalonEdit.Tests.csproj -c Release --no-restore
 
-    - name: Setup .NET LTS Previous
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: '8.0.x'
-
-    - name: Setup .NET LTS Current
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: '10.0.x'
-
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v2
-
-    - run: msbuild ICSharpCode.AvalonEdit.sln /t:Restore /p:Configuration=${{ matrix.configuration }}
-
-    - name: Build
-      run: msbuild ICSharpCode.AvalonEdit.sln /p:Configuration=${{ matrix.configuration }}
-
-    - name: Setup VSTest
-      uses: Malcolmnixon/Setup-VSTest@v4
-      
-    - name: LTS Current Unit Tests
-      run: vstest.console $env:TestAssembly
-      env:
-        TestAssembly: ICSharpCode.AvalonEdit.Tests\bin\${{ matrix.configuration }}\net10.0-windows\ICSharpCode.AvalonEdit.Tests.dll
-
-    - name: LTS Previous Unit Tests
-      run: vstest.console $env:TestAssembly
-      env:
-        TestAssembly: ICSharpCode.AvalonEdit.Tests\bin\${{ matrix.configuration }}\net8.0-windows\ICSharpCode.AvalonEdit.Tests.dll
-        
-    - name: net462 Unit Tests
-      run: vstest.console $env:TestAssembly
-      env:
-        TestAssembly: ICSharpCode.AvalonEdit.Tests\bin\${{ matrix.configuration }}\net462\ICSharpCode.AvalonEdit.Tests.dll
-        
-    - name: Style - tab check
-      run: python BuildTools\tidy.py
-
-    - name: Pack
-      run: dotnet pack ICSharpCode.AvalonEdit/ICSharpCode.AvalonEdit.csproj -c ${{ matrix.configuration }}
-
-    - name: Upload NuGet
-      if: matrix.configuration == 'release'
-      uses: actions/upload-artifact@v5
-      with:
-        name: AvalonEdit NuGet Package (${{ matrix.configuration }})
-        path: ICSharpCode.AvalonEdit/bin/Release/AvalonEdit*.nupkg
-        if-no-files-found: error      
-
-    - name: Upload Snupkg Artifact
-      if: matrix.configuration == 'release'
-      uses: actions/upload-artifact@v5
-      with:
-        name: AvalonEdit Snupkg (${{ matrix.configuration }})
-        path: ICSharpCode.AvalonEdit/bin/Release/AvalonEdit*.snupkg
-        if-no-files-found: error      
-        
-    - name: Publish NuGet
-      if: github.ref == 'refs/heads/master' && matrix.configuration == 'release'
-      run: |
-        dotnet nuget push "ICSharpCode.AvalonEdit\bin\Release\AvalonEdit*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/${{ github.repository_owner }}
+  publish:
+    name: Publish GitHub Package
+    needs: validate
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download validated package
+        uses: actions/download-artifact@v8
+        with:
+          name: avalonedit-nupkg
+          path: nupkg
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $expected = "$env:GITHUB_REF_NAME".Substring(1)
+          $package = Get-ChildItem nupkg/ICSharpCode.AvalonEdit.LibreWPF.*.nupkg -ErrorAction Stop
+          if ($package.Name -ne "ICSharpCode.AvalonEdit.LibreWPF.$expected.nupkg") {
+            throw "Tag $env:GITHUB_REF_NAME does not match validated package $($package.Name)."
+          }
+      - name: Push public package
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet nuget push nupkg/ICSharpCode.AvalonEdit.LibreWPF.*.nupkg --api-key $env:GITHUB_TOKEN --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --skip-duplicate

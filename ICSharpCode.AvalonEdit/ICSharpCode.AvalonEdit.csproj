@@ -6,9 +6,13 @@
        WinForms" comments there), and SourceLink removed (no CI/package publishing here). Resource/
        EmbeddedResource item groups are kept verbatim from upstream master. -->
   <PropertyGroup>
+    <!-- Keep this independently versioned fork insulated when checked out below OpenDevelop. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>ICSharpCode.AvalonEdit</RootNamespace>
     <AssemblyName>ICSharpCode.AvalonEdit</AssemblyName>
+    <!-- Preserve the assembly identity; the package itself is specific to LibreWPF. -->
+    <PackageId>ICSharpCode.AvalonEdit.LibreWPF</PackageId>
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <SignAssembly>true</SignAssembly>
@@ -16,6 +20,12 @@
     <Company>ic#code</Company>
     <Copyright>2000-2025 AlphaSierraPapa for the SharpDevelop Team</Copyright>
     <Description>AvalonEdit is the WPF-based text editor used in SharpDevelop.</Description>
+    <RepositoryUrl>https://github.com/lextudio/AvalonEdit</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- The public upstream version is retained by request, while this LibreWPF fork
+         intentionally depends on the LibreWPF preview closure. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
     <Version>6.3.2</Version>
     <AssemblyVersion>6.3.2.0</AssemblyVersion>
     <FileVersion>6.3.2.0</FileVersion>
@@ -34,6 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" Link="README.md" />
     <None Remove="Search\next.png" />
     <None Remove="Search\prev.png" />
     <None Remove="themes\RightArrow.cur" />

@@ -1,5 +1,5 @@
 <Project Sdk="LibreWPF.Sdk">
-  <!-- Cross-platform (ProGPU/macOS) adaptation of the upstream AvalonEdit 6.3.2 master csproj:
+  <!-- Cross-platform (ProGPU/macOS) adaptation of the upstream AvalonEdit master csproj:
        single net10.0-windows target via ProGPU.Wpf.Sdk instead of the upstream
        net8.0-windows;net10.0-windows;net462 multi-target, WinForms dropped (the 3 WinForms usages
        in TextArea/InsightWindow/CompletionWindowBase are patched out - see the "stop caring about
@@ -26,9 +26,9 @@
     <!-- The public upstream version is retained by request, while this LibreWPF fork
          intentionally depends on the LibreWPF preview closure. -->
     <NoWarn>$(NoWarn);NU5104</NoWarn>
-    <Version>6.3.2</Version>
-    <AssemblyVersion>6.3.2.0</AssemblyVersion>
-    <FileVersion>6.3.2.0</FileVersion>
+    <Version>6.3.1.120</Version>
+    <AssemblyVersion>6.3.1.120</AssemblyVersion>
+    <FileVersion>6.3.1.120</FileVersion>
     <DefineConstants>TRACE</DefineConstants>
     <UseNuGetPackages>true</UseNuGetPackages>
   </PropertyGroup>

@@ -54,7 +54,8 @@ namespace ICSharpCode.AvalonEdit.CodeCompletion
 			Point pointOnScreen = this.TextArea.TextView.PointToScreen(caret.Location - this.TextArea.TextView.ScrollOffset);
 			// WinForms Screen.FromPoint has no cross-platform equivalent; approximate with the
 			// primary work area (single-monitor assumption, stop caring about WinForms).
-			Rect workingArea = SystemParameters.WorkArea.TransformFromDevice(this);
+			// SystemParameters.WorkArea is already device independent, like MaxWidth/MaxHeight.
+			Rect workingArea = SystemParameters.WorkArea;
 
 			MaxHeight = workingArea.Height;
 			MaxWidth = Math.Min(workingArea.Width, Math.Max(1000, workingArea.Width * 0.6));

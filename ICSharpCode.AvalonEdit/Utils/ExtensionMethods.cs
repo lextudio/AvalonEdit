@@ -150,6 +150,29 @@ namespace ICSharpCode.AvalonEdit.Utils
 		#endregion
 
 		#region DPI independence
+		/// <summary>
+		/// How many of the units <see cref="Visual.PointToScreen"/> returns make one device-independent unit.
+		/// A native HWND source reports physical pixels, so this is the DPI scale; a portable source (macOS, Linux)
+		/// reports the platform's logical coordinates, the same space as Window.Left/Top, so this is 1.
+		/// Measured instead of assumed: the two cases cannot be told apart through public API, and a
+		/// converter that guesses wrong halves (or doubles) every popup position on a scaled display.
+		/// </summary>
+		public static double GetScreenUnitsPerDip(this Visual visual)
+		{
+			const double probe = 100;
+			try {
+				var root = PresentationSource.FromVisual(visual)?.RootVisual ?? visual;
+				Point origin = root.PointToScreen(new Point(0, 0));
+				Point shifted = root.PointToScreen(new Point(probe, 0));
+				double unit = (shifted.X - origin.X) / probe;
+				if (unit > 0 && !double.IsNaN(unit) && !double.IsInfinity(unit))
+					return unit;
+			} catch (InvalidOperationException) {
+				// no presentation source yet
+			}
+			return 1;
+		}
+
 		public static Rect TransformToDevice(this Rect rect, Visual visual)
 		{
 			Matrix matrix = PresentationSource.FromVisual(visual).CompositionTarget.TransformToDevice;

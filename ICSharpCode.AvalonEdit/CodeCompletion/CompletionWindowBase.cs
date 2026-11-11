@@ -334,16 +334,19 @@ namespace ICSharpCode.AvalonEdit.CodeCompletion
 			if (PresentationSource.FromVisual(textView) == null)
 				return;
 			
-			// PointToScreen returns device dependent units (physical pixels)
+			// PointToScreen reports physical pixels for a native window and the platform's logical (device independent)
+			// coordinates for a portable one; Window.Left/Top and SystemParameters.WorkArea are always device independent.
+			// Work in PointToScreen's units, then convert the result back.
+			double unit = textView.GetScreenUnitsPerDip();
 			Point location = textView.PointToScreen(visualLocation - textView.ScrollOffset);
 			Point locationTop = textView.PointToScreen(visualLocationTop - textView.ScrollOffset);
 
-			// Let's use device dependent units for everything
-			Size completionWindowSize = new Size(this.ActualWidth, this.ActualHeight).TransformToDevice(textView);
+			Size completionWindowSize = new Size(this.ActualWidth * unit, this.ActualHeight * unit);
 			Rect bounds = new Rect(location, completionWindowSize);
 			// WinForms Screen.GetWorkingArea has no cross-platform equivalent; approximate with
 			// the primary work area (single-monitor assumption, stop caring about WinForms).
-			Rect workingScreen = SystemParameters.WorkArea;
+			Rect workArea = SystemParameters.WorkArea;
+			Rect workingScreen = new Rect(workArea.X * unit, workArea.Y * unit, workArea.Width * unit, workArea.Height * unit);
 			if (!workingScreen.Contains(bounds)) {
 				if (bounds.Left < workingScreen.Left) {
 					bounds.X = workingScreen.Left;
@@ -361,7 +364,7 @@ namespace ICSharpCode.AvalonEdit.CodeCompletion
 				}
 			}
 			// Convert the window bounds to device independent units
-			bounds = bounds.TransformFromDevice(textView);
+			bounds = new Rect(bounds.X / unit, bounds.Y / unit, bounds.Width / unit, bounds.Height / unit);
 			this.Left = bounds.X;
 			this.Top = bounds.Y;
 		}

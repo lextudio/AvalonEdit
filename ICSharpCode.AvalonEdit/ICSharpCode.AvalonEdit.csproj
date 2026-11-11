@@ -26,9 +26,9 @@
     <!-- The public upstream version is retained by request, while this LibreWPF fork
          intentionally depends on the LibreWPF preview closure. -->
     <NoWarn>$(NoWarn);NU5104</NoWarn>
-    <Version>6.3.1.121</Version>
-    <AssemblyVersion>6.3.1.121</AssemblyVersion>
-    <FileVersion>6.3.1.121</FileVersion>
+    <Version>6.3.1.122</Version>
+    <AssemblyVersion>6.3.1.122</AssemblyVersion>
+    <FileVersion>6.3.1.122</FileVersion>
     <DefineConstants>TRACE</DefineConstants>
     <UseNuGetPackages>true</UseNuGetPackages>
   </PropertyGroup>

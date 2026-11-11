@@ -159,7 +159,7 @@ namespace ICSharpCode.AvalonEdit.Utils
 		/// </summary>
 		public static double GetScreenUnitsPerDip(this Visual visual)
 		{
-			const double probe = 100;
+			const double probe = 1000; // wide: a native window reports whole pixels, so a short baseline skews a fractional scale
 			try {
 				var root = PresentationSource.FromVisual(visual)?.RootVisual ?? visual;
 				Point origin = root.PointToScreen(new Point(0, 0));
